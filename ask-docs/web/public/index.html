@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ask-docs Web UI</title>
+  <link rel="stylesheet" href="./styles.css" />
+<script type="module" src="./src/main.js"></script>
+
+</head>
+<body>
+  <button id="theme-toggle" class="theme-btn">🌙</button>
+
+  <div id="app">
+    <div id="sidebar">
+      <h2>Sections</h2>
+      <input id="chunk-search" placeholder="Search chunks..." />
+      <ul id="sections"></ul>
+      <div id="doc-list"></div>
+    </div>
+    <div id="divider"></div>
+    <div id="main">
+      <h2>Answer</h2>
+      <pre id="answer"></pre>
+
+      <h2>Citations</h2>
+      <pre id="citations"></pre>
+
+      <div id="input-box">
+        <input id="question" placeholder="Ask a question..." />
+        <button id="ask-btn">Ask</button>
+      </div>
+
+      <div id="history"></div>
+    </div>
+  </div>
+
+</body>
+</html>

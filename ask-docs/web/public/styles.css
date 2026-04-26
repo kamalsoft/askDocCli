@@ -1,0 +1,200 @@
+body {
+  margin: 0;
+  background: #0d0d0d;
+  color: #e6e6e6;
+  font-family: Menlo, monospace;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+#sidebar {
+  width: 260px;
+  border-right: 1px solid #333;
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+#divider {
+  width: 5px;
+  cursor: col-resize;
+  background: #222;
+}
+
+#main {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+pre {
+  white-space: pre-wrap;
+  background: #111;
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+  transition: all 0.25s ease;
+}
+
+#input-box {
+  display: flex;
+  margin-top: 20px;
+}
+
+#question {
+  flex: 1;
+  padding: 10px;
+  background: #222;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+button {
+  padding: 10px 14px;
+  background: #444;
+  color: #eee;
+  border: none;
+  margin-left: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #555;
+}
+
+#sections {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+  transition: all 0.25s ease;
+}
+
+.section-item {
+  padding: 10px;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.section-item:hover {
+  background: #1a1a1a;
+}
+
+.section-item.active {
+  background: #222;
+  border-left: 3px solid #4af;
+}
+
+.section-heading {
+  font-weight: bold;
+  color: #fff;
+}
+
+.section-meta {
+  font-size: 12px;
+  color: #888;
+}
+
+.section-score {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.section-preview {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+mark {
+  background: #444;
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+#chunk-search {
+  width: 100%;
+  padding: 6px;
+  margin-top: 8px;
+  background: #222;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+#history {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #111;
+  padding: 10px;
+  border: 1px solid #333;
+  max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.history-item {
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.history-item:hover {
+  text-decoration: underline;
+}
+
+#doc-list {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.doc-item {
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.doc-item:hover {
+  text-decoration: underline;
+}
+
+.theme-btn {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  background: #333;
+  color: #eee;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  z-index: 1000;
+}
+
+.light body {
+  background: #fafafa;
+  color: #111;
+}
+
+.light pre {
+  background: #fff;
+  border-color: #ccc;
+}
+
+.light .theme-btn {
+  background: #ddd;
+  color: #111;
+}

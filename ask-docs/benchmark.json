@@ -1,0 +1,10 @@
+[
+  {
+    "question": "How do I configure the API?",
+    "mustContain": ["configure", "API"]
+  },
+  {
+    "question": "What is the authentication flow?",
+    "mustContain": ["auth", "token"]
+  }
+]

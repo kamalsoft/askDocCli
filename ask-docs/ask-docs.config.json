@@ -1,0 +1,10 @@
+{
+  "docsPath": "../docs",
+  "storePath": "./vector-store/docs.json",
+  "chunkChars": 500,
+  "topK": 5,
+ "generationModel": "Xenova/gpt2-medium",
+  "maxNewTokens": 60,
+  "crisp": false,
+  "forceIngest": true
+}
