@@ -7,7 +7,7 @@ import { loadConfig } from "./config.js";
 
 let cachedStore = null;
 
-export async function askDocs(question) {
+export async function askDocs(question, onToken = null) {
   const config = loadConfig();
   const settings = config.appSettings;
   const storePath = path.resolve(settings.storePath);
@@ -16,7 +16,10 @@ export async function askDocs(question) {
     if (!fs.existsSync(storePath)) {
       throw new Error("Vector store not found. Run: ask-docs ingest");
     }
-    cachedStore = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    const rawData = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    
+    // Handle structured format or legacy array format
+    cachedStore = rawData.chunks || rawData;
   }
 
   const store = cachedStore;
@@ -32,13 +35,26 @@ export async function askDocs(question) {
 
   scored.sort((a, b) => b.score - a.score);
 
-  const topSections = scored.slice(0, settings.topK || 5);
+  // 1.5 Reranker Step: Broad retrieval followed by filtering
+  let topSections = scored.slice(0, settings.rerankTopK || 10);
+  
+  if (settings.enableReranker) {
+    const topHeading = topSections[0]?.heading;
+    // Boost chunks that belong to the same heading as the top match
+    topSections = topSections.map(s => ({
+      ...s,
+      rerankScore: s.score + (s.heading === topHeading ? 0.05 : 0)
+    })).sort((a, b) => b.rerankScore - a.rerankScore);
+  }
+
+  topSections = topSections.slice(0, settings.topK || 5);
+
   const topScore = topSections[0]?.score ?? 0;
   const threshold = settings.confidenceThreshold ?? 0.12;
 
   // 3. Fallback mode
   if (topScore < threshold) {
-    const llmAnswer = await synthesizeAnswer(question, "No relevant context.");
+    const llmAnswer = await synthesizeAnswer(question, "No relevant context.", onToken);
     return {
       answer: llmAnswer,
       citations: [],
@@ -52,7 +68,7 @@ export async function askDocs(question) {
   const combined = topSections.map(s => s.text).join("\n\n");
 
   // 5. LLM synthesis
-  const llmAnswer = await synthesizeAnswer(question, combined);
+  const llmAnswer = await synthesizeAnswer(question, combined, onToken);
 
   // 6. Citations
   const citations = topSections.map(s => {

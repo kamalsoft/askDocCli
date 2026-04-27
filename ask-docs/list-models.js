@@ -4,7 +4,8 @@ import path from "path";
 import { loadConfig } from "./config.js";
 
 const config = loadConfig();
-const modelsPath = path.resolve(config.modelsPath);
+// Fallback to default path if config is malformed
+const modelsPath = path.resolve(config?.appSettings?.modelsPath || "./models");
 
 console.log(`🔍 Checking local models in: ${modelsPath}\n`);
 

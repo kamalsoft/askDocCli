@@ -2,11 +2,12 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { loadConfig } from './config.js';
 
 const config = loadConfig();
-const modelsPath = path.resolve(config.modelsPath);
+const modelsPath = path.resolve(config?.appSettings?.modelsPath || "./models");
 const shouldReDownload = process.argv.includes('--re-download');
 const downloadScript = path.join(path.dirname(import.meta.url.replace('file://', '')), 'download_models.sh');
 
@@ -52,7 +53,10 @@ async function verify() {
     const dataFile = onnxFile + '_data';
 
     const filesToVerify = [onnxFile];
-    if (fs.existsSync(dataFile)) filesToVerify.push(dataFile);
+    // Mandatory sidecar check for split-weight models
+    const isSplitModel = model.repo.includes('Llama-3.2') || model.repo.includes('Phi-3.5') || model.repo.includes('Qwen2.5');
+    
+    if (isSplitModel || fs.existsSync(dataFile)) filesToVerify.push(dataFile);
 
     console.log(`📦 Model: ${model.name}`);
 

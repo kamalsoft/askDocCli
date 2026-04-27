@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { performance } from "perf_hooks";
 import { ingestDocs } from "./ingest.js";
+import { clearCache } from "./cache.js";
 import { askDocs } from "./ask.js";
 
 const program = new Command();
@@ -45,6 +46,21 @@ program
     }
   });
 
+/* -------------------------------------------------------
+   Cache management
+------------------------------------------------------- */
+program
+  .command("clear-cache")
+  .description("Clear the ingestion cache to force a full rebuild of embeddings")
+  .action(() => {
+    const success = clearCache();
+    if (success) {
+      console.log(chalk.green("✨ Ingestion cache cleared successfully."));
+    } else {
+      console.log(chalk.yellow("ℹ️  No cache file found to clear."));
+    }
+  });
+
   /* -------------------------------------------------------
    Benchmark command
   ------------------------------------------------------- */
@@ -73,12 +89,17 @@ program
 
     let totalTests = benchmarks.length;
     let passedTests = 0;
+    let totalConfidence = 0;
 
     for (const [index, benchmark] of benchmarks.entries()) {
       console.log(chalk.blue(`\n--- Test ${index + 1}/${totalTests}: "${benchmark.question}" ---`));
       try {
-        const { answer, citations } = await askDocs(benchmark.question);
+        const startTest = performance.now();
+        const { answer, citations, confidence, fallback } = await askDocs(benchmark.question);
+        const endTest = performance.now();
+        const latency = ((endTest - startTest) / 1000).toFixed(2);
 
+        totalConfidence += confidence;
         let citationMatch = true;
         if (benchmark.expectedCitations && benchmark.expectedCitations.length > 0) {
           // Normalize actual citations to "filename :: Heading" for comparison
@@ -106,10 +127,11 @@ program
         }
 
         if (citationMatch && answerKeywordMatch) {
-          console.log(chalk.green('✅ Passed'));
+          console.log(chalk.green(`✅ Passed (${latency}s, Confidence: ${confidence.toFixed(3)})`));
           passedTests++;
         } else {
-          console.log(chalk.red('❌ Failed'));
+          console.log(chalk.red(`❌ Failed (${latency}s, Confidence: ${confidence.toFixed(3)})`));
+          if (fallback) console.log(chalk.gray('  ⚠️ Model entered fallback mode (RAG ignored)'));
           console.log(chalk.yellow('  Expected Citations:'), benchmark.expectedCitations);
           console.log(chalk.yellow('  Actual Citations:'), citations);
           console.log(chalk.yellow('  Expected Keywords:'), benchmark.expectedAnswerKeywords);

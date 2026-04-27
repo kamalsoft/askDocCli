@@ -1,12 +1,6 @@
 {
   "appSettings": {
-    "docsPath": "../docs",
-    "storePath": "./vector-store/docs.json",
     "activeModel": "llama-3.2",
-    "chunkChars": 1200,
-    "topK": 5,
-    "maxNewTokens": 256,
-    "intraOpNumThreads": 4,
-    "interOpNumThreads": 4
+    "activeProfile": "fast"
   }
 }
