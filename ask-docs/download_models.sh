@@ -59,11 +59,8 @@ download_model() {
     local hub_file=""
     local target=""
 
-    if [[ "$repo" == "Phi-3.5-mini-instruct-ONNX-GQA" ]]; then
+    if [[ "$repo" == "Phi-3.5-mini-instruct-ONNX-GQA" || "$repo" == "Qwen2.5-0.5B-Instruct" || "$repo" == "Llama-3.2-1B-Instruct" ]]; then
         hub_file="onnx/model_q4.onnx"
-        target="onnx/model_q4.onnx"
-    elif [[ "$repo" == "Qwen2.5-0.5B-Instruct" || "$repo" == "Llama-3.2-1B-Instruct" ]]; then
-        hub_file="onnx/decoder_model_merged_quantized.onnx"
         target="onnx/model_q4.onnx"
     elif [[ "$repo" == "jina-embeddings-v2-base-en" ]]; then
         hub_file="onnx/model_quantized.onnx"

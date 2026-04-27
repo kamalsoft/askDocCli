@@ -29,11 +29,21 @@ if [ -f "$LLAMA_PATH/decoder_model_merged_quantized.onnx" ]; then
     mv "$LLAMA_PATH/decoder_model_merged_quantized.onnx" "$LLAMA_PATH/model_q4.onnx"
 fi
 
+if [ -f "$LLAMA_PATH/decoder_model_merged_quantized.onnx_data" ]; then
+    echo "✅ Renaming Llama Data: decoder_model_merged_quantized.onnx_data -> model_q4.onnx_data"
+    mv "$LLAMA_PATH/decoder_model_merged_quantized.onnx_data" "$LLAMA_PATH/model_q4.onnx_data"
+fi
+
 # 4. Fix Qwen-2.5
 QWEN_PATH="$MODELS_DIR/onnx-community/Qwen2.5-0.5B-Instruct/onnx"
 if [ -f "$QWEN_PATH/decoder_model_merged_quantized.onnx" ]; then
     echo "✅ Renaming Qwen: decoder_model_merged_quantized.onnx -> model_q4.onnx"
     mv "$QWEN_PATH/decoder_model_merged_quantized.onnx" "$QWEN_PATH/model_q4.onnx"
+fi
+
+if [ -f "$QWEN_PATH/decoder_model_merged_quantized.onnx_data" ]; then
+    echo "✅ Renaming Qwen Data: decoder_model_merged_quantized.onnx_data -> model_q4.onnx_data"
+    mv "$QWEN_PATH/decoder_model_merged_quantized.onnx_data" "$QWEN_PATH/model_q4.onnx_data"
 fi
 
 echo "🚀 All files renamed correctly. Now run: node list-models.js"

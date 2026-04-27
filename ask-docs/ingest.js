@@ -13,18 +13,25 @@ function validateModels(config) {
   const modelInfo = config.reasoningModels[modelKey];
   const embedInfo = config.embeddingModels["jina-v2"];
 
-  const requirements = [
-    path.join(embedInfo.repo, embedInfo.targetFile),
-    path.join(modelInfo.repo, modelInfo.targetFile)
+  const modelChecks = [
+    { info: embedInfo, relPath: path.join(embedInfo.repo, embedInfo.targetFile) },
+    { info: modelInfo, relPath: path.join(modelInfo.repo, modelInfo.targetFile) }
   ];
 
-  // Special check for split weights (Phi-3.5)
-  if (modelKey === 'phi-3.5') {
-    requirements.push(path.join(modelInfo.repo, modelInfo.targetFile + "_data"));
+  // Special check for split weights (Phi-3.5, Llama-3.2, etc.)
+  // If the .onnx file is small (< 1GB), it almost certainly requires a _data sidecar
+  const onnxPath = path.join(modelsPath, modelInfo.repo, modelInfo.targetFile);
+  if (fs.existsSync(onnxPath) && fs.statSync(onnxPath).size < 1024 * 1024 * 1024) {
+    if (modelKey === 'phi-3.5' || modelKey === 'llama-3.2' || modelKey === 'qwen-0.5b') {
+      modelChecks.push({ 
+        info: { ...modelInfo, name: `${modelInfo.name} (Weights)`, minSize: 500000000 },
+        relPath: path.join(modelInfo.repo, modelInfo.targetFile + "_data")
+      });
+    }
   }
 
-  for (const relPath of requirements) {
-    const fullPath = path.join(modelsPath, relPath);
+  for (const check of modelChecks) {
+    const fullPath = path.join(modelsPath, check.relPath);
     if (!fs.existsSync(fullPath)) {
       if (fullPath.endsWith('_data')) {
         console.error(`❌ Error: Model data weights missing: ${fullPath}`);
@@ -36,15 +43,37 @@ function validateModels(config) {
     }
 
     const stats = fs.statSync(fullPath);
-    const minSize = modelInfo.minSize || settings.minModelSize;
+    const minSize = check.info.minSize || settings.minModelSize;
     if (stats.size < minSize) {
-      console.error(`❌ Error: Model file is too small (${(stats.size / 1024 / 1024).toFixed(2)} MB):`);
+      console.error(`❌ Error: Model file is too small (${(stats.size / 1024 / 1024).toFixed(2)} MB) for ${check.info.name}:`);
       console.error(`   ${fullPath}`);
-      console.error(`\n💡 This is likely a Git LFS pointer. Run 'bash download_models.sh' to get the actual weights.`);
+      console.error(`\n💡 This is likely a Git LFS pointer or an interrupted download.`);
       process.exit(1);
     }
   }
   console.log("✅ Model integrity verified.");
+}
+
+function verifyStoreIntegrity(storePath, expectedVersion) {
+  try {
+    const data = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    
+    if (!data.version || !data.chunks) {
+      throw new Error("Invalid vector store format.");
+    }
+
+    if (data.version !== expectedVersion) {
+      throw new Error(`Version mismatch. Expected ${expectedVersion}, found ${data.version}`);
+    }
+
+    console.log(`📡 Health Check: Vector store verified.`);
+    console.log(`   - Version: ${data.version}`);
+    console.log(`   - Chunks: ${data.chunks.length}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ Health Check Failed: ${err.message}`);
+    return false;
+  }
 }
 
 export async function ingestDocs({ force = false, debug = false } = {}) {
@@ -72,7 +101,14 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
   // Load existing store to preserve cached embeddings
   let existingChunks = [];
   if (fs.existsSync(storePath)) {
-    existingChunks = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    try {
+      const rawData = JSON.parse(fs.readFileSync(storePath, "utf8"));
+      // Handle structured format or legacy array format
+      existingChunks = rawData.chunks || (Array.isArray(rawData) ? rawData : []);
+    } catch (err) {
+      console.warn("⚠️  Could not parse existing vector store, starting fresh.");
+      existingChunks = [];
+    }
   }
 
   const newChunks = [];
@@ -108,8 +144,19 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
   updateCacheMeta(cache);
   saveCache(cache);
   
-  fs.writeFileSync(storePath, JSON.stringify(newChunks, null, 2));
-  console.log(`\n✅ Ingest complete. ${newChunks.length} chunks saved.`);
+  // Structured save with metadata
+  const storeData = {
+    version: settings.ingestVersion,
+    model: settings.activeModel,
+    createdAt: new Date().toISOString(),
+    chunks: newChunks
+  };
+
+  fs.writeFileSync(storePath, JSON.stringify(storeData, null, 2));
+  console.log(`\n✅ Ingest complete. ${newChunks.length} chunks saved to disk.`);
+
+  // Perform Health Check
+  verifyStoreIntegrity(storePath, settings.ingestVersion);
 }
 
 function splitIntoChunks(text, file, size) {

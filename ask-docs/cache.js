@@ -33,6 +33,15 @@ export function saveCache(cache) {
   fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
 }
 
+export function clearCache() {
+  const cachePath = getCachePath();
+  if (fs.existsSync(cachePath)) {
+    fs.unlinkSync(cachePath);
+    return true;
+  }
+  return false;
+}
+
 export function hashContent(content) {
   return crypto.createHash("sha256").update(content).digest("hex");
 }

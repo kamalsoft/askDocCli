@@ -97,13 +97,14 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
       if (exists) {
         const stats = fs.statSync(expectedPath);
         sizeBytes = stats.size;
+        const minSize = info.minSize || config.appSettings.minModelSize;
+
         if (sizeBytes < 2000) status = "⚠️ Pointer (LFS)";
-        else if (sizeBytes < 1000000) status = "⚠️ Corrupt/Partial";
         else if (fs.existsSync(expectedPath + "_data")) {
             status = "✅ Available (Split)";
             sizeBytes += fs.statSync(expectedPath + "_data").size;
-        } else if (sizeBytes < 800 * 1024 * 1024 && (key === 'phi-3.5' || key === 'llama-3.2')) {
-            status = "❌ Missing .onnx_data";
+        } else if (sizeBytes < minSize) {
+            status = (key === 'phi-3.5' || key === 'llama-3.2') ? "❌ Missing .onnx_data" : "⚠️ Corrupt/Partial";
         } else {
             status = "✅ Available";
         }
@@ -131,7 +132,30 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
 
         log(`Q: ${question}`);
         const startTime = Date.now();
-        let result = await askDocs(question);
+        
+        // Detect if client wants a stream (Web UI) or a standard JSON response (CURL/API)
+        const acceptHeader = req.headers.accept || "";
+        const isStreaming = acceptHeader.includes("text/event-stream");
+
+        let onToken = null;
+        if (isStreaming) {
+          // Set headers for Server-Sent Events
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+          });
+
+          onToken = (payload) => {
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+          };
+        }
+
+        let { answer, tps, tokenCount, ...metadata } = await askDocs(question, onToken);
+        const result = { answer, ...metadata };
 
         // Strip embeddings from sections to reduce payload size
         if (result.sections) {
@@ -156,7 +180,18 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         log(`A: Generated answer in ${duration}s`);
 
-        return sendJSON(res, 200, result);
+        if (isStreaming) {
+          // Send final metadata and close the SSE stream
+          res.write(`data: ${JSON.stringify({ 
+          done: true, 
+          tps,
+          tokenCount,
+          ...result 
+        })}\n\n`);
+        return res.end();
+        } else {
+          return sendJSON(res, 200, result);
+        }
       } catch (err) {
         console.error("Error:", err);
         return sendJSON(res, 500, { error: "Internal server error" });
@@ -167,9 +202,11 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
 
   // Static hosting for Web UI
   const webDist = path.resolve("web/dist");
-  const filePath = path.join(webDist, pathname === "/" ? "index.html" : pathname);
+  const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+  const filePath = path.join(webDist, safePath === "/" ? "index.html" : safePath);
 
-  if (fs.existsSync(filePath)) {
+  // Security Check: Ensure path is within webDist
+  if (fs.existsSync(filePath) && filePath.startsWith(webDist) && !fs.lstatSync(filePath).isDirectory()) {
     const ext = path.extname(filePath);
     const type =
       ext === ".html" ? "text/html" :
@@ -178,7 +215,10 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
       "text/plain";
 
     res.writeHead(200, { "Content-Type": type });
-    return res.end(fs.readFileSync(filePath));
+    // Use Streams for better memory efficiency
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    return;
   }
 
   sendJSON(res, 404, { error: "Not found" });
