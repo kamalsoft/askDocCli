@@ -1,10 +1,12 @@
 {
-  "docsPath": "../docs",
-  "storePath": "./vector-store/docs.json",
-  "chunkChars": 500,
-  "topK": 5,
- "generationModel": "Xenova/gpt2-medium",
-  "maxNewTokens": 60,
-  "crisp": false,
-  "forceIngest": true
+  "appSettings": {
+    "docsPath": "../docs",
+    "storePath": "./vector-store/docs.json",
+    "activeModel": "llama-3.2",
+    "chunkChars": 1200,
+    "topK": 5,
+    "maxNewTokens": 256,
+    "intraOpNumThreads": 4,
+    "interOpNumThreads": 4
+  }
 }

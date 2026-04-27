@@ -1,0 +1,23 @@
+[
+  {
+    "question": "How to authenticate?",
+    "expectedCitations": [
+      "authentication.md :: Authentication Guide"
+    ],
+    "expectedAnswerKeywords": ["API keys", "HMAC signatures", "X-Signature header", "securely", "identification"]
+  },
+  {
+    "question": "What is the transaction lifecycle?",
+    "expectedCitations": [
+      "transactions.md :: Transaction Lifecycle"
+    ],
+    "expectedAnswerKeywords": ["authorization", "capture", "settlement", "reconciliation"]
+  },
+  {
+    "question": "What are common error codes?",
+    "expectedCitations": [
+      "errors.md :: Error Handling Guide"
+    ],
+    "expectedAnswerKeywords": ["INVALID_REQUEST", "AUTH_FAILED", "CARD_DECLINED"]
+  }
+]
