@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import chalk from "chalk";
+import fs from "fs";
+import path from "path";
 import { performance } from "perf_hooks";
 import { ingestDocs } from "./ingest.js";
 import { askDocs } from "./ask.js";
@@ -42,6 +44,94 @@ program
       process.exitCode = 1;
     }
   });
+
+  /* -------------------------------------------------------
+   Benchmark command
+  ------------------------------------------------------- */
+  program
+  .command('benchmark')
+  .description('Run accuracy benchmarks against the documentation set')
+  .option('-f, --file <file>', 'Specify a ground-truth JSON file for benchmarks', 'benchmarks.json')
+  .action(async (opts) => {
+    const benchmarkFile = path.resolve(opts.file);
+    console.log(chalk.cyan(`\n🚀 Running benchmarks from: ${benchmarkFile}`));
+
+    if (!fs.existsSync(benchmarkFile)) {
+      console.error(chalk.red(`❌ Benchmark file not found: ${benchmarkFile}`));
+      process.exitCode = 1;
+      return;
+    }
+
+    let benchmarks;
+    try {
+      benchmarks = JSON.parse(fs.readFileSync(benchmarkFile, 'utf8'));
+    } catch (err) {
+      console.error(chalk.red(`❌ Failed to parse benchmark file: ${err.message}`));
+      process.exitCode = 1;
+      return;
+    }
+
+    let totalTests = benchmarks.length;
+    let passedTests = 0;
+
+    for (const [index, benchmark] of benchmarks.entries()) {
+      console.log(chalk.blue(`\n--- Test ${index + 1}/${totalTests}: "${benchmark.question}" ---`));
+      try {
+        const { answer, citations } = await askDocs(benchmark.question);
+
+        let citationMatch = true;
+        if (benchmark.expectedCitations && benchmark.expectedCitations.length > 0) {
+          // Normalize actual citations to "filename :: Heading" for comparison
+          const actualCitationStrings = citations.map(c => {
+            const parts = c.split(' :: ');
+            return `${parts[0]} :: ${parts[1].replace(/"/g, '')}`; // Remove quotes from heading
+          });
+          for (const expected of benchmark.expectedCitations) {
+            if (!actualCitationStrings.some(ac => ac.includes(expected))) {
+              citationMatch = false;
+              break;
+            }
+          }
+        }
+
+        let answerKeywordMatch = true;
+        if (benchmark.expectedAnswerKeywords && benchmark.expectedAnswerKeywords.length > 0) {
+          const lowerCaseAnswer = answer.toLowerCase();
+          for (const keyword of benchmark.expectedAnswerKeywords) {
+            if (!lowerCaseAnswer.includes(keyword.toLowerCase())) {
+              answerKeywordMatch = false;
+              break;
+            }
+          }
+        }
+
+        if (citationMatch && answerKeywordMatch) {
+          console.log(chalk.green('✅ Passed'));
+          passedTests++;
+        } else {
+          console.log(chalk.red('❌ Failed'));
+          console.log(chalk.yellow('  Expected Citations:'), benchmark.expectedCitations);
+          console.log(chalk.yellow('  Actual Citations:'), citations);
+          console.log(chalk.yellow('  Expected Keywords:'), benchmark.expectedAnswerKeywords);
+          console.log(chalk.yellow('  Actual Answer:'), answer);
+        }
+      } catch (err) {
+        console.error(chalk.red(`  ❌ Error during askDocs for "${benchmark.question}": ${err.message}`));
+      }
+    }
+
+    console.log(chalk.cyan(`\n--- Benchmark Summary ---`));
+    console.log(`Total Tests: ${totalTests}`);
+    console.log(`Passed: ${passedTests}`);
+    console.log(`Failed: ${totalTests - passedTests}`);
+    if (passedTests === totalTests) {
+      console.log(chalk.green('🎉 All benchmarks passed!'));
+    } else {
+      console.log(chalk.red('⚠️ Some benchmarks failed.'));
+      process.exitCode = 1;
+    }
+  });
+
 
 /* -------------------------------------------------------
    Ask command

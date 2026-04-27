@@ -10,6 +10,7 @@ Everything runs 100% locally — no cloud, no SaaS, no telemetry.
 
 ## Features
 
+- Performance Optimized (ONNX Threading)
 - Local RAG engine (no external APIs)
 - LLM answer synthesis (local model)
 - Confidence fallback mode (prevents hallucinations)
@@ -22,6 +23,47 @@ Everything runs 100% locally — no cloud, no SaaS, no telemetry.
 - RAG‑optimized docs folder
 - Offline by design
 
+## ⚙️ System Architecture & Documentation
+
+Ask‑Docs is engineered as a 100% local, air-gapped RAG (Retrieval‑Augmented Generation) system. It utilizes the ONNX Runtime to execute both embedding and reasoning models on your local hardware.
+
+### Visual Workflow & Data Processing
+
+```mermaid
+graph TD
+    subgraph "1. Local Ingestion Engine (Offline)"
+        A[docs/ folder] --> B[Data Collection: File Walker]
+        B --> C{Cache Check: cache.json}
+        C -- "Hash Match" --> D[Skip File]
+        C -- "New/Changed" --> E[Heading-aware Chunker]
+        E --> F[Local Embedding Model: Jina V2 Base]
+        F --> G[(Local Vector Store: docs.json)]
+    end
+
+    subgraph "2. Offline Query Processor (No Cloud)"
+        H[Terminal / Web UI Request] --> I[POST /ask]
+        I --> J[Local Question Embedding]
+        J --> K[Similarity Search vs docs.json]
+        K --> L[Retrieve Top-5 Context Chunks]
+        L --> M[Context-Restricted Prompt Construction]
+        M --> N[Local LLM: Phi-3.5 Mini Instruct]
+        N --> O[Offline Answer Synthesis]
+        O --> P[Final Response + Exact Citations]
+        P --> H
+    end
+```
+
+### Technical Breakdown
+
+1.  **Data Collection & Chunker**: The engine scans the `docs/` directory. It intelligently splits Markdown files into chunks of approximately 1200 characters while preserving the context of the nearest heading.
+2.  **Caching Mechanism**: To ensure speed, `cache.json` tracks file hashes. Only modified or new files are sent to the embedding model, significantly reducing re-ingest time.
+3.  **Local Embedding**: Chunks are processed by the `Xenova/jina-embeddings-v2-base-en` model running on the ONNX Runtime. This converts human language into high-dimensional vectors (embedded data) without sending data to a server.
+4.  **Vector Store**: The resulting vectors and their corresponding text segments are stored in a local `docs.json` file.
+5.  **Similarity Search**: When you ask a question, it is converted into a vector using the same local model. A dot-product calculation finds the most relevant chunks in your documentation.
+6.  **Context-Restricted Synthesis**:
+    *   **The Prompt**: The system merges the top 5 chunks into a specialized prompt: *"Rewrite the answer using ONLY the information in the context. Do NOT invent details. Write a clear, concise answer in 3–5 sentences."*
+    *   **The Model**: The `Phi-3.5 Mini Instruct` (or chosen reasoning model) processes this prompt. Because it runs locally via `transformers.js`, no data ever leaves your machine.
+7.  **Response**: The system returns a synthesized answer accompanied by exact citations (file name, heading, and line numbers) to ensure transparency and eliminate hallucinations.
 
 ## Project Structure
 ```
@@ -358,15 +400,23 @@ Planned modules:
 
 ## Troubleshooting
 
-## No chunks found  
+### 🔴 Protobuf parsing failed
+This error usually indicates that the ONNX model files are corrupt or incomplete.
+1. **Git LFS Pointers**: Check if your `.onnx` files are only a few hundred bytes. If so, they are pointers and not the actual weights.
+2. **Missing Split Weights**: Large models like Phi-3.5 require the `.onnx_data` file in the same directory as the `.onnx` file.
+3. **Solution**: Re-run `bash download_models.sh` or follow the `manual_model_setup.md` guide.
+
+### 🟡 No chunks found  
 Check `docsPath`.
 
-## Always returns architecture.md  
+### 🟡 Always returns architecture.md  
 Docs contained duplicate content — fixed now.
 
-## Slow ingest  
+### 🟡 Slow ingest  
 Enable caching or reduce chunk size.
 
+### 🟢 Model Integrity
+Run `node verify-models.js` to calculate SHA-256 checksums and verify file sizes.
 
 ## Roadmap
 
@@ -379,4 +429,3 @@ Enable caching or reduce chunk size.
 ## License
 
 MIT License — fully open‑source and free to use.
-

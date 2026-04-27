@@ -1,205 +1,155 @@
+// ask-docs/ingest.js
+
 import fs from "fs";
 import path from "path";
-import { pipeline } from "@xenova/transformers";
+import { embed } from "./embed.js";
 import { loadConfig } from "./config.js";
-import {
-  loadCache,
-  saveCache,
-  shouldRebuildFile,
-  updateFileEntry,
-  updateCacheMeta
-} from "./cache.js";
+import { loadCache, saveCache, shouldRebuildFile, updateFileEntry, updateCacheMeta } from "./cache.js";
 
-const config = loadConfig();
+function validateModels(config) {
+  const settings = config.appSettings;
+  const modelsPath = path.resolve(settings.modelsPath);
+  const modelKey = settings.activeModel;
+  const modelInfo = config.reasoningModels[modelKey];
+  const embedInfo = config.embeddingModels["jina-v2"];
 
-/* -------------------------------------------------------
-   Walk docs directory
-------------------------------------------------------- */
-function walk(dir) {
-  let results = [];
-  const list = fs.readdirSync(dir);
+  const requirements = [
+    path.join(embedInfo.repo, embedInfo.targetFile),
+    path.join(modelInfo.repo, modelInfo.targetFile)
+  ];
 
-  for (const file of list) {
-    const full = path.join(dir, file);
-    const stat = fs.statSync(full);
+  // Special check for split weights (Phi-3.5)
+  if (modelKey === 'phi-3.5') {
+    requirements.push(path.join(modelInfo.repo, modelInfo.targetFile + "_data"));
+  }
 
-    if (stat.isDirectory()) {
-      results = results.concat(walk(full));
-    } else if (file.endsWith(".md")) {
-      results.push(full);
+  for (const relPath of requirements) {
+    const fullPath = path.join(modelsPath, relPath);
+    if (!fs.existsSync(fullPath)) {
+      if (fullPath.endsWith('_data')) {
+        console.error(`❌ Error: Model data weights missing: ${fullPath}`);
+        console.error(`💡 This model is large and requires the external .onnx_data file.`);
+      } else {
+        console.error(`❌ Error: Model file missing: ${fullPath}`);
+      }
+      process.exit(1);
+    }
+
+    const stats = fs.statSync(fullPath);
+    const minSize = modelInfo.minSize || settings.minModelSize;
+    if (stats.size < minSize) {
+      console.error(`❌ Error: Model file is too small (${(stats.size / 1024 / 1024).toFixed(2)} MB):`);
+      console.error(`   ${fullPath}`);
+      console.error(`\n💡 This is likely a Git LFS pointer. Run 'bash download_models.sh' to get the actual weights.`);
+      process.exit(1);
     }
   }
-  return results;
+  console.log("✅ Model integrity verified.");
 }
 
-/* -------------------------------------------------------
-   Heading‑aware chunking
-------------------------------------------------------- */
-function chunkText(text, chunkSize) {
+export async function ingestDocs({ force = false, debug = false } = {}) {
+  const config = loadConfig();
+
+  // Fail fast if models are missing or corrupt
+  validateModels(config);
+
+  const settings = config.appSettings;
+  const cache = loadCache();
+  const docsDir = settings.docsPath;
+  const storePath = settings.storePath;
+
+  console.log("📘 Ingesting docs from:", docsDir);
+
+  if (!fs.existsSync(docsDir)) {
+    throw new Error(`Docs folder not found: ${docsDir}`);
+  }
+
+  const files = fs.readdirSync(docsDir).filter(f => f.endsWith(".md"));
+  if (files.length === 0) {
+    throw new Error("No Markdown files found in docs folder.");
+  }
+
+  // Load existing store to preserve cached embeddings
+  let existingChunks = [];
+  if (fs.existsSync(storePath)) {
+    existingChunks = JSON.parse(fs.readFileSync(storePath, "utf8"));
+  }
+
+  const newChunks = [];
+
+  for (const file of files) {
+    try {
+      const fullPath = path.join(docsDir, file);
+      const text = fs.readFileSync(fullPath, "utf8");
+
+      if (!force && !shouldRebuildFile(file, text, cache)) {
+        if (debug) console.log(`i  Skipping ${file} (cache hit)`);
+        // Recover existing chunks for this file
+        const saved = existingChunks.filter(c => c.file === file);
+        newChunks.push(...saved);
+        continue;
+      }
+
+      const sections = splitIntoChunks(text, file, settings.chunkChars);
+
+      for (const sec of sections) {
+        const embedding = await embed(sec.text);
+        newChunks.push({ ...sec, embedding });
+      }
+
+      updateFileEntry(file, text, cache);
+      console.log(`✔ Processed ${file} (${sections.length} chunks)`);
+
+    } catch (err) {
+      console.error(`❌ Error processing ${file}:`, err);
+    }
+  }
+
+  updateCacheMeta(cache);
+  saveCache(cache);
+  
+  fs.writeFileSync(storePath, JSON.stringify(newChunks, null, 2));
+  console.log(`\n✅ Ingest complete. ${newChunks.length} chunks saved.`);
+}
+
+function splitIntoChunks(text, file, size) {
   const lines = text.split("\n");
   const chunks = [];
   let buffer = [];
-  let startLine = 1;
-  let currentHeading = "ROOT";
+  let start = 1;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    buffer.push(lines[i]);
 
-    const headingMatch = line.match(/^#{1,6}\s+(.*)/);
-    if (headingMatch) {
-      currentHeading = headingMatch[1].trim() || "ROOT";
-    }
-
-    buffer.push(line);
-
-    if (buffer.join("\n").length >= chunkSize) {
+    if (buffer.join("\n").length >= size) {
       chunks.push({
-        text: buffer.join("\n"),
-        startLine,
+        id: `${file}-${chunks.length}`,
+        file,
+        heading: extractHeading(buffer),
+        startLine: start,
         endLine: i + 1,
-        heading: currentHeading
+        text: buffer.join("\n")
       });
       buffer = [];
-      startLine = i + 2;
+      start = i + 2;
     }
   }
 
   if (buffer.length > 0) {
     chunks.push({
-      text: buffer.join("\n"),
-      startLine,
+      id: `${file}-${chunks.length}`,
+      file,
+      heading: extractHeading(buffer),
+      startLine: start,
       endLine: lines.length,
-      heading: currentHeading
+      text: buffer.join("\n")
     });
   }
 
   return chunks;
 }
 
-/* -------------------------------------------------------
-   Progress bar
-------------------------------------------------------- */
-function renderProgress(current, total) {
-  const width = 30;
-  const ratio = total === 0 ? 1 : current / total;
-  const filled = Math.round(ratio * width);
-  const bar = "█".repeat(filled) + " ".repeat(width - filled);
-  const pct = Math.round(ratio * 100);
-  process.stdout.write(`\r[${bar}] ${pct}% (${current}/${total})`);
-}
-
-/* -------------------------------------------------------
-   Load old store (for hybrid merge)
-------------------------------------------------------- */
-function loadOldStore(storePath) {
-  if (!fs.existsSync(storePath)) return [];
-  try {
-    const raw = fs.readFileSync(storePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/* -------------------------------------------------------
-   MAIN INGEST FUNCTION
-------------------------------------------------------- */
-export async function ingestDocs(opts = {}) {
-  const force = opts.force === true;
-
-  const docsPath = config.docsPath || "../docs";
-  const storePath = config.storePath || "./vector-store/docs.json";
-
-  console.log(`\n📁 Scanning docs directory: ${docsPath}`);
-
-  const embedder = await pipeline(
-    "feature-extraction",
-    "Xenova/jina-embeddings-v2-base-en"
-  );
-
-  const files = walk(docsPath);
-  console.log(`📄 Found ${files.length} Markdown files\n`);
-
-  const cache = loadCache();
-  const oldStore = loadOldStore(storePath);
-
-  const chunksByFile = {};
-  for (const chunk of oldStore) {
-    if (!chunk.filePath) continue;
-    if (!chunksByFile[chunk.filePath]) {
-      chunksByFile[chunk.filePath] = [];
-    }
-    chunksByFile[chunk.filePath].push(chunk);
-  }
-
-  const newStore = [];
-  let processed = 0;
-  const total = files.length;
-
-  for (const filePath of files) {
-    const raw = fs.readFileSync(filePath, "utf8");
-    const needsRebuild = shouldRebuildFile(filePath, raw, cache);
-
-    if (!force && !needsRebuild && chunksByFile[filePath]) {
-      console.log(`✔ Using cached chunks for: ${filePath}`);
-      newStore.push(...chunksByFile[filePath]);
-      processed++;
-      renderProgress(processed, total);
-      continue;
-    }
-
-    console.log(`🔄 Rebuilding embeddings for: ${filePath}`);
-
-    const chunks = chunkText(raw, config.chunkChars || 1200);
-
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-
-      console.log(`   → Adding chunk ${i + 1}/${chunks.length} from ${filePath}`);
-
-      const emb = await embedder(chunk.text, {
-        pooling: "mean",
-        normalize: true
-      });
-
-      const vec = emb.data;
-
-      if (!Array.isArray(vec) || vec.length === 0) {
-        console.warn("⚠️ Empty embedding for chunk:", chunk.text.slice(0, 40));
-      }
-
-      newStore.push({
-        id: `${filePath}-${i}`,
-        file: path.basename(filePath),
-        filePath,
-        heading: chunk.heading,
-        startLine: chunk.startLine,
-        endLine: chunk.endLine,
-        text: chunk.text,
-        embedding: vec
-      });
-    }
-
-    updateFileEntry(filePath, raw, cache);
-    console.log(`   ✔ Updated cache entry for: ${filePath}`);
-
-    processed++;
-    renderProgress(processed, total);
-  }
-
-  process.stdout.write("\n");
-
-  const finalStore =
-    newStore.length === 0 && oldStore.length > 0 ? oldStore : newStore;
-
-  console.log(`\n📦 Writing ${finalStore.length} chunks to ${storePath}`);
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  fs.writeFileSync(storePath, JSON.stringify(finalStore, null, 2));
-
-  updateCacheMeta(cache);
-  saveCache(cache);
-
-  console.log(`🗂  Cache updated: ${Object.keys(cache.files).length} files tracked`);
-  console.log("✅ Ingest complete.\n");
+function extractHeading(lines) {
+  const h = lines.find(l => l.startsWith("#"));
+  return h ? h.replace(/^#+\s*/, "") : "Untitled";
 }
