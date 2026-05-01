@@ -36,16 +36,20 @@ export async function synthesizeAnswer(question, context, onToken = null, retryA
 
   if (!generator || loadedModelRepo !== modelInfo?.repo) {
     const modelsPath = path.resolve(settings.modelsPath);
+    // For split models (Phi, Llama, Qwen), the main .onnx file is smaller as weights are in _data
+    const defaultMinSize = settings.minModelSize || 1000000;
+    const minSize = (modelKey === 'phi-3.5' || modelKey === 'llama-3.2' || modelKey === 'qwen-0.5b') ? 500000000 : defaultMinSize;
 
     // Check if configured model exists, otherwise find the first available one
     const configuredPath = path.join(modelsPath, modelInfo.repo, modelInfo.targetFile);
-    if (!fs.existsSync(configuredPath) || fs.statSync(configuredPath).size < settings.minModelSize) {
+    if (!fs.existsSync(configuredPath) || fs.statSync(configuredPath).size < minSize) {
       console.warn(`⚠️  Configured model ${modelKey} not found at ${configuredPath}`);
 
       const availableModelKey = Object.keys(config.reasoningModels).find(key => {
         const info = config.reasoningModels[key];
         const p = path.join(modelsPath, info.repo, info.targetFile);
-        return fs.existsSync(p) && fs.statSync(p).size > settings.minModelSize;
+        const mSize = (key === 'phi-3.5' || key === 'llama-3.2' || key === 'qwen-0.5b') ? 500000000 : defaultMinSize;
+        return fs.existsSync(p) && fs.statSync(p).size >= mSize;
       });
 
       if (availableModelKey) {

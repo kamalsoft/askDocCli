@@ -58,6 +58,7 @@ download_model() {
     # Download ONNX weights
     local hub_file=""
     local target=""
+    local actual_hub_file=""
 
     if [[ "$repo" == "Phi-3.5-mini-instruct-ONNX-GQA" || "$repo" == "Qwen2.5-0.5B-Instruct" || "$repo" == "Llama-3.2-1B-Instruct" ]]; then
         hub_file="onnx/model_q4.onnx"
@@ -68,6 +69,8 @@ download_model() {
     else
         hub_file="$target"
     fi
+
+    actual_hub_file="$hub_file"
 
     local weights_size=$(get_file_size "$folder/$target")
     if [ -f "$folder/$target" ] && [ "$weights_size" -gt 1000000 ]; then
@@ -90,6 +93,7 @@ download_model() {
                     echo "🔍 Trying fallback: $fb"
                     if curl "${AUTH_ARGS[@]}" -Lf --progress-bar "https://huggingface.co/$org/$repo/download/main/$fb" -o "$folder/$target"; then
                        echo "✅ Found weights at $fb"
+                       actual_hub_file="$fb"
                        break
                     fi
                 fi
@@ -98,18 +102,18 @@ download_model() {
     fi
 
     # Check for and download external data file (required for models > 2GB)
-    echo "🔍 Checking for external data weights: ${hub_file}_data"
-    if curl "${AUTH_ARGS[@]}" -I -Lf "https://huggingface.co/$org/$repo/resolve/main/${hub_file}_data" > /dev/null 2>&1; then
+    echo "🔍 Checking for external data weights: ${actual_hub_file}_data"
+    if curl "${AUTH_ARGS[@]}" -I -Lf "https://huggingface.co/$org/$repo/resolve/main/${actual_hub_file}_data" > /dev/null 2>&1; then
         echo "⬇️ Downloading external data weights..."
-        curl "${AUTH_ARGS[@]}" -LfgC - --progress-bar "https://huggingface.co/$org/$repo/resolve/main/${hub_file}_data?download=true" -o "$folder/${target}_data"
+        curl "${AUTH_ARGS[@]}" -LfgC - --progress-bar "https://huggingface.co/$org/$repo/resolve/main/${actual_hub_file}_data?download=true" -o "$folder/${target}_data"
     fi
 
     # Post-download integrity check (LFS pointer check)
     local final_size=$(get_file_size "$folder/$target")
     local min_size=100000 # 1MB
     
-    # Phi 3.5 main .onnx file is ~680MB. The rest is in _data
-    if [[ "$repo" == "Phi-3.5-mini-instruct-ONNX-GQA" ]]; then
+    # Split models main .onnx file is ~650-700MB. The rest is in _data
+    if [[ "$repo" == "Phi-3.5-mini-instruct-ONNX-GQA" || "$repo" == "Llama-3.2-1B-Instruct" || "$repo" == "Qwen2.5-0.5B-Instruct" ]]; then
         min_size=600000000
     fi
 
