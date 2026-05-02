@@ -31,6 +31,18 @@ function sendText(res, status, text) {
   res.end(text);
 }
 
+async function getRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", chunk => (body += chunk));
+    req.on("end", () => {
+      try { resolve(JSON.parse(body || "{}")); }
+      catch (e) { reject(new Error("Invalid JSON body")); }
+    });
+    req.on("error", reject);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const baseURL = `http://${req.headers.host || 'localhost'}`;
   const parsedUrl = new URL(req.url, baseURL);
@@ -55,8 +67,8 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
   // List docs
   if (pathname === "/api/docs/list") {
     const docsDir = path.resolve(config.appSettings.docsPath);
-    const files = fs.readdirSync(docsDir).filter(f => f.endsWith(".md"));
-    return sendJSON(res, 200, files);
+    const files = await fs.promises.readdir(docsDir);
+    return sendJSON(res, 200, files.filter(f => f.endsWith(".md")));
   }
 
   // Get doc
@@ -65,44 +77,53 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
     if (!name) return sendJSON(res, 400, { error: "Missing ?name=" });
 
     const filePath = path.resolve(config.appSettings.docsPath, name);
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.promises.access(filePath);
+      const content = await fs.promises.readFile(filePath, "utf8");
+      return sendText(res, 200, content);
+    } catch {
       return sendJSON(res, 404, { error: "File not found" });
     }
-
-    const content = fs.readFileSync(filePath, "utf8");
-    return sendText(res, 200, content);
   }
 
   // Search docs
   if (pathname === "/api/docs/search") {
     const q = query.q?.toLowerCase() || "";
     const docsDir = path.resolve(config.appSettings.docsPath);
-    const files = fs.readdirSync(docsDir).filter(f => f.endsWith(".md"));
+    const files = await fs.promises.readdir(docsDir);
 
-    const results = files.filter(f => f.toLowerCase().includes(q));
+    const results = files.filter(f => f.endsWith(".md") && f.toLowerCase().includes(q));
     return sendJSON(res, 200, results);
   }
 
   // Models summary
   if (pathname === "/api/models/summary") {
     const modelsPath = path.resolve(config.appSettings.modelsPath);
-    const summary = Object.entries(config.reasoningModels).map(([key, info]) => {
+    const summary = await Promise.all(Object.entries(config.reasoningModels).map(async ([key, info]) => {
       const modelDir = path.join(modelsPath, info.repo);
       const expectedPath = path.join(modelDir, info.targetFile);
-      const exists = fs.existsSync(expectedPath);
+      
+      let exists = false;
+      try { 
+        await fs.promises.access(expectedPath);
+        exists = true; 
+      } catch {}
       
       let status = "❌ Missing";
       let sizeBytes = 0;
 
       if (exists) {
-        const stats = fs.statSync(expectedPath);
+        const stats = await fs.promises.stat(expectedPath);
         sizeBytes = stats.size;
         const minSize = info.minSize || config.appSettings.minModelSize;
+        const dataPath = expectedPath + "_data";
+        const hasSplitData = await fs.promises.access(dataPath).then(() => true).catch(() => false);
 
         if (sizeBytes < 2000) status = "⚠️ Pointer (LFS)";
-        else if (fs.existsSync(expectedPath + "_data")) {
+        else if (hasSplitData) {
             status = "✅ Available (Split)";
-            sizeBytes += fs.statSync(expectedPath + "_data").size;
+            const dataStats = await fs.promises.stat(dataPath);
+            sizeBytes += dataStats.size;
         } else if (sizeBytes < minSize) {
             status = (key === 'phi-3.5' || key === 'llama-3.2') ? "❌ Missing .onnx_data" : "⚠️ Corrupt/Partial";
         } else {
@@ -117,17 +138,14 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
         sizeGB: (sizeBytes / (1024 * 1024 * 1024)).toFixed(2),
         isActive: key === config.appSettings.activeModel
       };
-    });
+    }));
     return sendJSON(res, 200, summary);
   }
 
   // Ask endpoint
   if (pathname === "/ask" && req.method === "POST") {
-    let body = "";
-    req.on("data", chunk => (body += chunk));
-    req.on("end", async () => {
-      try {
-        const { question } = JSON.parse(body || "{}");
+    try {
+        const { question } = await getRequestBody(req);
         if (!question) return sendJSON(res, 400, { error: "Missing 'question'" });
 
         log(`Q: ${question}`);
@@ -192,11 +210,10 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
         } else {
           return sendJSON(res, 200, result);
         }
-      } catch (err) {
-        console.error("Error:", err);
-        return sendJSON(res, 500, { error: "Internal server error" });
-      }
-    });
+    } catch (err) {
+      console.error("Error:", err);
+      return sendJSON(res, 500, { error: err.message || "Internal server error" });
+    }
     return;
   }
 

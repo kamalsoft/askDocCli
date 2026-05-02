@@ -92,9 +92,7 @@ export function loadConfig() {
   const activeProfileKey = userConfig.appSettings?.activeProfile || DEFAULT_CONFIG.appSettings.activeProfile;
   const profileSettings = DEFAULT_CONFIG.profiles[activeProfileKey] || {};
 
-  // Deep merge appSettings to prevent "undefined" path errors
-  // Order: Default -> Profile Overrides -> User Explicit Settings
-  return { 
+  const finalConfig = { 
     ...DEFAULT_CONFIG, 
     ...userConfig,
     appSettings: {
@@ -103,4 +101,12 @@ export function loadConfig() {
       ...(userConfig.appSettings || {})
     }
   };
+
+  // Quick validation
+  const p = path.resolve(finalConfig.appSettings.docsPath);
+  if (!fs.existsSync(p)) {
+    console.warn(`⚠️ Warning: docsPath does not exist: ${p}`);
+  }
+
+  return finalConfig;
 }

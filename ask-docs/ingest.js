@@ -93,22 +93,22 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
     throw new Error(`Docs folder not found: ${docsDir}`);
   }
 
-  const files = fs.readdirSync(docsDir).filter(f => f.endsWith(".md"));
+  const files = (await fs.promises.readdir(docsDir)).filter(f => f.endsWith(".md"));
   if (files.length === 0) {
     throw new Error("No Markdown files found in docs folder.");
   }
 
   // Load existing store to preserve cached embeddings
   let existingChunks = [];
-  if (fs.existsSync(storePath)) {
-    try {
-      const rawData = JSON.parse(fs.readFileSync(storePath, "utf8"));
-      // Handle structured format or legacy array format
-      existingChunks = rawData.chunks || (Array.isArray(rawData) ? rawData : []);
-    } catch (err) {
+  try {
+    await fs.promises.access(storePath);
+    const rawData = JSON.parse(await fs.promises.readFile(storePath, "utf8"));
+    existingChunks = rawData.chunks || (Array.isArray(rawData) ? rawData : []);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
       console.warn("⚠️  Could not parse existing vector store, starting fresh.");
-      existingChunks = [];
     }
+    existingChunks = [];
   }
 
   const newChunks = [];
@@ -116,7 +116,7 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
   for (const file of files) {
     try {
       const fullPath = path.join(docsDir, file);
-      const text = fs.readFileSync(fullPath, "utf8");
+      const text = await fs.promises.readFile(fullPath, "utf8");
 
       if (!force && !shouldRebuildFile(file, text, cache)) {
         if (debug) console.log(`i  Skipping ${file} (cache hit)`);
@@ -152,7 +152,7 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
     chunks: newChunks
   };
 
-  fs.writeFileSync(storePath, JSON.stringify(storeData, null, 2));
+  await fs.promises.writeFile(storePath, JSON.stringify(storeData, null, 2));
   console.log(`\n✅ Ingest complete. ${newChunks.length} chunks saved to disk.`);
 
   // Perform Health Check
