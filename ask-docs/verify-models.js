@@ -1,97 +1,92 @@
-#!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
-import chalk from 'chalk';
-import { execSync } from 'child_process';
 import { loadConfig } from './config.js';
 
-const config = loadConfig();
-const modelsPath = path.resolve(config?.appSettings?.modelsPath || "./models");
-const shouldReDownload = process.argv.includes('--re-download');
-const downloadScript = path.join(path.dirname(import.meta.url.replace('file://', '')), 'download_models.sh');
+async function verifyOpenRouter(config) {
+  const { apiKey, baseUrl } = config.appSettings.openrouter;
+  console.log('📡 Verifying OpenRouter connectivity...');
+  
+  if (!apiKey && (config.appSettings.inferenceMode === 'openrouter' || config.appSettings.inferenceMode === 'auto')) {
+    console.warn('⚠️  Warning: No OpenRouter API key found in config or environment.');
+    return false;
+  }
 
-async function getHash(filePath, size) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(filePath);
-    let bytesRead = 0;
-
-    stream.on('error', err => reject(err));
-    stream.on('data', chunk => {
-      bytesRead += chunk.length;
-      const progress = ((bytesRead / size) * 100).toFixed(1);
-      if (process.stdout.isTTY) {
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(2);
-        process.stdout.write(`⏳ Hashing: ${progress}% [${path.basename(filePath)}]`);
-      }
-      hash.update(chunk);
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
     });
-    stream.on('end', () => {
-      if (process.stdout.isTTY) {
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(2);
-      }
-      resolve(hash.digest('hex'));
-    });
-  });
+    
+    if (response.ok) {
+      console.log('✅ OpenRouter: Connection successful and API key is valid.');
+      return true;
+    } else {
+      const err = await response.json();
+      console.error(`❌ OpenRouter: API Error - ${err.error?.message || response.statusText}`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`❌ OpenRouter: Could not reach API - ${error.message}`);
+    return false;
+  }
 }
 
-async function verify() {
-  console.log(`🔍 Verifying model integrity in: ${modelsPath}\n`);
-  let corruptionFound = false;
+async function verifyLocalModels(config) {
+  const { modelsPath, activeModel } = config.appSettings;
+  const root = path.resolve(modelsPath);
+  console.log(`📂 Verifying local models in: ${root}`);
 
-  const models = [
+  const modelsToCheck = [
     ...Object.values(config.reasoningModels),
     ...Object.values(config.embeddingModels)
   ];
 
-  for (const model of models) {
-    const modelDir = path.join(modelsPath, model.repo);
-    const onnxFile = path.join(modelDir, model.targetFile);
-    const dataFile = onnxFile + '_data';
+  for (const model of modelsToCheck) {
+    const modelDir = path.join(root, model.repo);
+    const mainFile = path.join(modelDir, model.targetFile);
+    const dataFile = mainFile + '_data';
 
-    const filesToVerify = [onnxFile];
-    // Mandatory sidecar check for split-weight models
-    const isSplitModel = model.repo.includes('Llama-3.2') || model.repo.includes('Phi-3.5') || model.repo.includes('Qwen2.5');
-    
-    if (isSplitModel || fs.existsSync(dataFile)) filesToVerify.push(dataFile);
-
-    console.log(`📦 Model: ${model.name}`);
-
-    for (const file of filesToVerify) {
-      if (!fs.existsSync(file)) {
-        console.log(`  ❌ Missing: ${path.basename(file)}`);
-        corruptionFound = true;
-        continue;
-      }
-
-      const stats = fs.statSync(file);
-      
-      if (stats.size < 2048) {
-        console.log(`  ❌ ${path.basename(file)} is a Git LFS pointer (${stats.size} bytes). Download failed!`);
-        console.log(`  🧹 Removing corrupt file: ${path.basename(file)}`);
-        fs.unlinkSync(file);
-        corruptionFound = true;
-      } else {
-        const hash = await getHash(file, stats.size);
-        console.log(`✅ ${path.basename(file)}: ${hash}`);
-      }
+    if (!fs.existsSync(mainFile)) {
+      console.error(`❌ Missing: ${model.name} (${model.repo})`);
+      continue;
     }
-    console.log('');
-  }
 
-  if (corruptionFound && shouldReDownload) {
-    console.log(chalk?.cyan ? chalk.cyan('🔄 Corruption/Missing files found. Triggering re-download...') : '🔄 Corruption/Missing files found. Triggering re-download...');
-    try {
-      execSync(`bash "${downloadScript}"`, { stdio: 'inherit' });
-    } catch (err) {
-      console.error('❌ Re-download failed:', err.message);
+    const stats = fs.statSync(mainFile);
+    const isLfsPointer = stats.size < 2048;
+
+    if (isLfsPointer) {
+      console.error(`❌ Error: ${model.name} is a Git LFS pointer. Please download the actual weights.`);
+      continue;
     }
-  } else if (corruptionFound) {
-    console.log('💡 Tip: Run this script with --re-download to automatically fix these issues.');
+
+    // Check for split weights if model is large
+    const needsDataFile = model.minSize > 500000000;
+    if (needsDataFile && !fs.existsSync(dataFile)) {
+      console.error(`❌ Error: ${model.name} is missing its .onnx_data file.`);
+      continue;
+    }
+
+    console.log(`✅ Validated: ${model.name}`);
   }
 }
 
-verify().catch(console.error);
+async function run() {
+  const config = loadConfig();
+  const mode = config.appSettings.inferenceMode;
+
+  console.log(`🚀 Starting verification for mode: ${mode}\n`);
+
+  await verifyLocalModels(config);
+  
+  if (mode === 'openrouter' || mode === 'auto') {
+    console.log('');
+    const apiOk = await verifyOpenRouter(config);
+    if (!apiOk && mode === 'openrouter') {
+      console.error('\n🚨 Critical: Inference mode is set to "openrouter" but the API is unreachable.');
+      process.exit(1);
+    }
+  }
+
+  console.log('\n✨ Verification complete.');
+}
+
+run();

@@ -115,7 +115,7 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
       if (exists) {
         const stats = await fs.promises.stat(expectedPath);
         sizeBytes = stats.size;
-        const minSize = info.minSize || config.appSettings.minModelSize;
+        const minSize = info.minSize || 1000000;
         const dataPath = expectedPath + "_data";
         const hasSplitData = await fs.promises.access(dataPath).then(() => true).catch(() => false);
 
@@ -125,7 +125,7 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
             const dataStats = await fs.promises.stat(dataPath);
             sizeBytes += dataStats.size;
         } else if (sizeBytes < minSize) {
-            status = (key === 'phi-3.5' || key === 'llama-3.2') ? "❌ Missing .onnx_data" : "⚠️ Corrupt/Partial";
+            status = info.isSplit ? "❌ Missing .onnx_data" : "⚠️ Corrupt/Partial";
         } else {
             status = "✅ Available";
         }

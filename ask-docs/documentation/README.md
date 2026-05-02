@@ -37,14 +37,14 @@ node cli.js ingest
 
 ## � Architecture
 
-The project follows a client-server architecture:
+The project is built on a lean, high-performance Node.js stack:
 
-- **Backend (Node.js):** A lightweight server built with the native `http` module (no heavy frameworks). It manages:
-  - Document retrieval and basic keyword searching.
-  - Vector store management (local JSON-based stores).
-  - AI Inference via `@huggingface/transformers` (ONNX Runtime).
-- **Frontend:** A web-based UI (served from `web/dist`) that interacts with the backend via JSON and Server-Sent Events (SSE).
-- **Inference Engine:** Powered by `Transformers.js`, enabling hardware-accelerated inference without Python or external API keys.
+*   **Orchestration**: `commander` (CLI) and `blessed` (TUI).
+*   **Inference**: `@huggingface/transformers` (v3) provides the pipeline abstraction.
+*   **Backend Engine**: `onnxruntime-node` performs the actual tensor math for local models.
+*   **Storage**: Native `fs` and `crypto` (for hashing) manage a custom JSON vector store and ingest cache.
+*   **Feedback**: `chalk` provides colorized logging for ingestion and query states.
+*   **Web Layer**: Native `http` module (no Express) supports a lightweight API and Static/SSE hosting.
 
 ## 🚀 Execution Modes
 

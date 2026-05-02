@@ -1,5 +1,5 @@
 // ask-docs/synthesizer.js
-// Local LLM Answer Synthesis using Phi-3.5 Mini (Xenova)
+// Local LLM Answer Synthesis using Llama-3.2 (Xenova/ONNX)
 
 import { pipeline, env, TextStreamer } from "@huggingface/transformers";
 import { loadConfig } from "./config.js";
@@ -27,29 +27,144 @@ function isLooping(text) {
   return (uniqueWords.size / words.length) < 0.35; 
 }
 
+/**
+ * Handles inference via OpenRouter API
+ */
+async function synthesizeOpenRouterAnswer(question, context, onToken) {
+  const config = loadConfig();
+  const { apiKey, model, baseUrl } = config.appSettings.openrouter;
+
+  if (!apiKey) {
+    throw new Error("OpenRouter API Key is missing. Set it in ask-docs.config.json or OPENROUTER_API_KEY env var.");
+  }
+
+  const systemMessage = `You are a documentation assistant.
+Strict Rules:
+1. Answer ONLY using the provided Context. 
+2. If the context is insufficient, say "I am sorry, but the documentation does not contain this information."
+3. Use numerical citations like [1], [2] based on the context snippets.
+
+Format:
+<thought> Analyze the context and plan the answer </thought>
+<answer> Concise response with citations </answer>`;
+
+  const userContent = `Context:\n"""\n${context}\n"""\n\nQuestion: ${question}`;
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "X-Title": "Ask-Docs Local RAG"
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: userContent }
+      ],
+      stream: !!onToken
+    })
+  });
+
+  if (!response.ok) {
+    const errData = await response.json();
+    throw new Error(`OpenRouter API Error: ${errData.error?.message || response.statusText}`);
+  }
+
+  if (!onToken) {
+    const data = await response.json();
+    const fullText = data.choices[0].message.content;
+    return parseResponse(fullText);
+  }
+
+  // Handle Streaming
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let fullText = "";
+  let answerStarted = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split("\n").filter(l => l.trim().startsWith("data: "));
+
+    for (const line of lines) {
+      const dataStr = line.replace("data: ", "");
+      if (dataStr === "[DONE]") break;
+      try {
+        const json = JSON.parse(dataStr);
+        const token = json.choices[0].delta?.content || "";
+        if (token) {
+          fullText += token;
+          if (!answerStarted && fullText.includes("<answer>")) {
+            answerStarted = true;
+            onToken({ type: "answer_start" });
+          } else if (answerStarted) {
+            onToken({ type: "answer", text: token.replace("</answer>", "") });
+          } else {
+            onToken({ type: "thought", text: token.replace("<thought>", "") });
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  return parseResponse(fullText);
+}
+
+function parseResponse(fullText) {
+  const parts = fullText.split(/<answer>/i);
+  const answer = parts.length > 1 ? parts[parts.length - 1].split(/<\/answer>/i)[0].trim() : fullText.trim();
+  return { answer, tps: "N/A", tokenCount: fullText.length / 4 }; // Approximation
+}
+
 export async function synthesizeAnswer(question, context, onToken = null, retryAttempt = 0) {
   const config = loadConfig();
   const settings = config.appSettings;
+
+  if (settings.inferenceMode === "openrouter") {
+    return synthesizeOpenRouterAnswer(question, context, onToken);
+  }
+
+  if (settings.inferenceMode === "auto") {
+    try {
+      return await synthesizeOpenRouterAnswer(question, context, onToken);
+    } catch (err) {
+      console.warn(`⚠️ OpenRouter failed: ${err.message}. Falling back to local model.`);
+      if (onToken) onToken({ type: "status", text: "OpenRouter unavailable. Falling back to local model..." });
+      // Continue to local inference logic below
+    }
+  }
 
   let modelKey = settings.activeModel || "llama-3.2";
   let modelInfo = config.reasoningModels[modelKey];
 
   if (!generator || loadedModelRepo !== modelInfo?.repo) {
     const modelsPath = path.resolve(settings.modelsPath);
-    // For split models (Phi, Llama, Qwen), the main .onnx file is smaller as weights are in _data
-    const defaultMinSize = settings.minModelSize || 1000000;
-    const minSize = (modelKey === 'phi-3.5' || modelKey === 'llama-3.2' || modelKey === 'qwen-0.5b') ? 500000000 : defaultMinSize;
+
+    const checkExists = (p, info) => {
+      if (!fs.existsSync(p)) return false;
+      if (info.isSplit) {
+        const dataPath = p + "_data";
+        if (!fs.existsSync(dataPath)) return false;
+        // For split models, check the combined size of the .onnx and .onnx_data files
+        return (fs.statSync(p).size + fs.statSync(dataPath).size) >= (info.minSize || 1000000);
+      }
+      return fs.statSync(p).size >= (info.minSize || 1000000);
+    };
 
     // Check if configured model exists, otherwise find the first available one
     const configuredPath = path.join(modelsPath, modelInfo.repo, modelInfo.targetFile);
-    if (!fs.existsSync(configuredPath) || fs.statSync(configuredPath).size < minSize) {
+    if (!checkExists(configuredPath, modelInfo)) {
       console.warn(`⚠️  Configured model ${modelKey} not found at ${configuredPath}`);
 
       const availableModelKey = Object.keys(config.reasoningModels).find(key => {
         const info = config.reasoningModels[key];
         const p = path.join(modelsPath, info.repo, info.targetFile);
-        const mSize = (key === 'phi-3.5' || key === 'llama-3.2' || key === 'qwen-0.5b') ? 500000000 : defaultMinSize;
-        return fs.existsSync(p) && fs.statSync(p).size >= mSize;
+        return checkExists(p, info);
       });
 
       if (availableModelKey) {

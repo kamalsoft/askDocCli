@@ -74,12 +74,17 @@ export async function runTUI() {
 
     try {
       const response = await askDocs(text, (payload) => {
-        // As soon as we get the first token, the "Thinking..." line is overwritten
-        if (payload.token) {
-          currentAnswer += payload.token;
+        if (payload.type === 'answer_start') {
+          currentAnswer = "";
+          chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} `);
+        } else if (payload.type === 'answer' || payload.token) {
+          // Support both new 'text' property and legacy 'token' property
+          currentAnswer += (payload.text || payload.token);
           chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} ${currentAnswer}`);
-          screen.render();
+        } else if (payload.type === 'status') {
+          chatLog.setLine(aiLineIndex, `{yellow-fg}${payload.text}{/yellow-fg}`);
         }
+        screen.render();
       });
 
       // Update with final answer (clears "Thinking..." if no tokens were streamed) and stats

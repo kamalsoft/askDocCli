@@ -18,16 +18,11 @@ function validateModels(config) {
     { info: modelInfo, relPath: path.join(modelInfo.repo, modelInfo.targetFile) }
   ];
 
-  // Special check for split weights (Phi-3.5, Llama-3.2, etc.)
-  // If the .onnx file is small (< 1GB), it almost certainly requires a _data sidecar
-  const onnxPath = path.join(modelsPath, modelInfo.repo, modelInfo.targetFile);
-  if (fs.existsSync(onnxPath) && fs.statSync(onnxPath).size < 1024 * 1024 * 1024) {
-    if (modelKey === 'phi-3.5' || modelKey === 'llama-3.2' || modelKey === 'qwen-0.5b') {
-      modelChecks.push({ 
-        info: { ...modelInfo, name: `${modelInfo.name} (Weights)`, minSize: 500000000 },
-        relPath: path.join(modelInfo.repo, modelInfo.targetFile + "_data")
-      });
-    }
+  if (modelInfo.isSplit) {
+    modelChecks.push({ 
+      info: { ...modelInfo, name: `${modelInfo.name} (Weights)`, minSize: 500000000 },
+      relPath: path.join(modelInfo.repo, modelInfo.targetFile + "_data")
+    });
   }
 
   for (const check of modelChecks) {
@@ -43,7 +38,7 @@ function validateModels(config) {
     }
 
     const stats = fs.statSync(fullPath);
-    const minSize = check.info.minSize || settings.minModelSize;
+    const minSize = check.info.minSize || 1000000;
     if (stats.size < minSize) {
       console.error(`❌ Error: Model file is too small (${(stats.size / 1024 / 1024).toFixed(2)} MB) for ${check.info.name}:`);
       console.error(`   ${fullPath}`);

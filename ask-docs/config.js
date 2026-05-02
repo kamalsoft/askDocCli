@@ -7,7 +7,7 @@ const DEFAULT_CONFIG = {
     storePath: "./vector-store/docs.json",
     cachePath: "./vector-store/cache.json",
     modelsPath: "./models",
-    activeModel: "lama-3.2", // Switched from phi-3.5 for speed
+    activeModel: "llama-3.2", // Switched from phi-3.5 for speed
     activeProfile: "standard",
     allowRemoteModels: false,
     chunkChars: 600,        // Further reduction: 600 chars is ~100-150 tokens.
@@ -18,13 +18,18 @@ const DEFAULT_CONFIG = {
     intraOpNumThreads: 0,    // 0 = Auto-detect (Let ONNX optimize for your specific CPU)
     interOpNumThreads: 1,    
     maxNewTokens: 256,
-    minModelSize: 100000000,
     temperature: 0.0,        // Maximum precision.
     top_p: 0.9,
     repetition_penalty: 1.2, // Base penalty to prevent loops
     rerankTopK: 5,          // Reduced to prevent instruction-drift in small models
     enableReranker: true,   // High-fidelity chunk selection
     enableRethink: true,    // Two-pass reasoning
+    inferenceMode: "local", // 'local', 'openrouter', or 'auto' (fallback)
+    openrouter: {
+      apiKey: process.env.OPENROUTER_API_KEY || "",
+      model: "google/gemini-2.0-flash-001",
+      baseUrl: "https://openrouter.ai/api/v1"
+    }
   },
   profiles: {
     standard: {}, // Uses defaults above
@@ -45,6 +50,7 @@ const DEFAULT_CONFIG = {
       targetFile: "onnx/model_q4.onnx",
       dtype: "q4",
       minSize: 600000000,
+      isSplit: true,
       template: {
         system: "<|start_header_id|>system<|end_header_id|>\n\n",
         user: "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
@@ -57,6 +63,7 @@ const DEFAULT_CONFIG = {
       targetFile: "onnx/model_q4.onnx",
       dtype: "q4",
       minSize: 600000000,
+      isSplit: true,
       template: {
         system: "<|system|>\n",
         user: "<|user|>\n",
@@ -68,7 +75,8 @@ const DEFAULT_CONFIG = {
       repo: "onnx-community/Qwen2.5-0.5B-Instruct",
       targetFile: "onnx/model_q4.onnx",
       dtype: "q4",
-      minSize: 300000000
+      minSize: 300000000,
+      isSplit: true
     }
   },
   embeddingModels: {
@@ -92,21 +100,18 @@ export function loadConfig() {
   const activeProfileKey = userConfig.appSettings?.activeProfile || DEFAULT_CONFIG.appSettings.activeProfile;
   const profileSettings = DEFAULT_CONFIG.profiles[activeProfileKey] || {};
 
-  const finalConfig = { 
+  // Deep merge appSettings and specifically the openrouter block to preserve defaults
+  return { 
     ...DEFAULT_CONFIG, 
     ...userConfig,
     appSettings: {
       ...DEFAULT_CONFIG.appSettings,
       ...profileSettings,
-      ...(userConfig.appSettings || {})
+      ...(userConfig.appSettings || {}),
+      openrouter: {
+        ...DEFAULT_CONFIG.appSettings.openrouter,
+        ...(userConfig.appSettings?.openrouter || {})
+      }
     }
   };
-
-  // Quick validation
-  const p = path.resolve(finalConfig.appSettings.docsPath);
-  if (!fs.existsSync(p)) {
-    console.warn(`⚠️ Warning: docsPath does not exist: ${p}`);
-  }
-
-  return finalConfig;
 }

@@ -25,44 +25,55 @@ Everything runs 100% locally — no cloud, no SaaS, no telemetry.
 
 ## ⚙️ System Architecture & Documentation
 
-Ask‑Docs is engineered as a 100% local, air-gapped RAG (Retrieval‑Augmented Generation) system. It utilizes the ONNX Runtime to execute both embedding and reasoning models on your local hardware.
+Ask‑Docs is engineered as a hybrid RAG (Retrieval‑Augmented Generation) system. While ingestion and embedding are strictly local for privacy, the reasoning phase can be toggled between local execution (ONNX) and remote inference via OpenRouter.
 
 ### Visual Workflow & Data Processing
 
 ```mermaid
-graph TD
-    subgraph "1. Local Ingestion Engine (Offline)"
-        A[docs/ folder] --> B[Data Collection: File Walker]
-        B --> C{Cache Check: cache.json}
-        C -- "Hash Match" --> D[Skip File]
-        C -- "New/Changed" --> E[Heading-aware Chunker]
-        E --> F[Local Embedding Model: Jina V2 Base]
-        F --> G[(Local Vector Store: docs.json)]
+graph LR
+    %% Visual Styling for better UX
+    classDef local fill:#e3f2fd,stroke:#1e88e5,stroke-width:1px,color:#000;
+    classDef remote fill:#fff3e0,stroke:#fb8c00,stroke-width:1px,color:#000;
+    classDef storage fill:#f3e5f5,stroke:#8e24aa,stroke-width:1px,color:#000;
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:1px,color:#000;
+    classDef start fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#000;
+
+    subgraph "Phase 1: Local Ingestion (Strictly Private)"
+        A[docs/ folder]:::start --> B[File Walker]
+        B --> C{Cache?}:::decision
+        C -- "Hit" --> D[Skip]
+        C -- "Miss" --> E[Chunker]
+        E --> F[Jina V2 Embedding]:::local
+        F --> G[(Vector Store)]:::storage
     end
 
-    subgraph "2. Offline Query Processor (No Cloud)"
-        H[Terminal / Web UI Request] --> I[POST /ask]
-        I --> J[Local Question Embedding]
-        J --> K[Similarity Search vs docs.json]
-        K --> L[Retrieve Top-5 Context Chunks]
-        L --> M[Context-Restricted Prompt Construction]
-        M --> N[Local LLM: Phi-3.5 Mini Instruct]
-        N --> O[Offline Answer Synthesis]
-        O --> P[Final Response + Exact Citations]
-        P --> H
+    subgraph "Phase 2: Hybrid Query Processor"
+        H[User Input]:::start --> I[Query Embedding]:::local
+        I --> J[Vector Search]
+        J --> K[Context Retrieval]
+        K --> L[Build Prompt]
+        L --> M{Mode?}:::decision
+        M -- "Local" --> N[Llama 3.2 SLM]:::local
+        M -- "Remote" --> O[OpenRouter API]:::remote
+        M -- "Auto" --> O
+        O -- "Fail" --> N
+        N --> P[Synthesis]
+        O --> P
+        P --> Q[Response]:::start
     end
 ```
 
 ### Technical Breakdown
 
-1.  **Data Collection & Chunker**: The engine scans the `docs/` directory. It intelligently splits Markdown files into chunks of approximately 1200 characters while preserving the context of the nearest heading.
+1.  **Data Collection & Chunker**: The engine scans the `docs/` directory using native `fs` logic. It intelligently splits Markdown files into chunks of ~600 characters while preserving the context of the nearest heading.
 2.  **Caching Mechanism**: To ensure speed, `cache.json` tracks file hashes. Only modified or new files are sent to the embedding model, significantly reducing re-ingest time.
-3.  **Local Embedding**: Chunks are processed by the `Xenova/jina-embeddings-v2-base-en` model running on the ONNX Runtime. This converts human language into high-dimensional vectors (embedded data) without sending data to a server.
+3.  **Local Embedding**: Chunks are processed by `Xenova/jina-embeddings-v2-base-en` via `@huggingface/transformers`. The `onnxruntime-node` engine executes these models locally on your CPU.
 4.  **Vector Store**: The resulting vectors and their corresponding text segments are stored in a local `docs.json` file.
 5.  **Similarity Search**: When you ask a question, it is converted into a vector using the same local model. A dot-product calculation finds the most relevant chunks in your documentation.
 6.  **Context-Restricted Synthesis**:
     *   **The Prompt**: The system merges the top 5 chunks into a specialized prompt: *"Rewrite the answer using ONLY the information in the context. Do NOT invent details. Write a clear, concise answer in 3–5 sentences."*
-    *   **The Model**: The `Phi-3.5 Mini Instruct` (or chosen reasoning model) processes this prompt. Because it runs locally via `transformers.js`, no data ever leaves your machine.
+    *   **The Model**: In `local` mode, **Llama 3.2 1B** (via `transformers`) handles reasoning. In `openrouter` mode, `fetch` is used to call remote LLMs.
+    *   **User Interface**: The Terminal UI is powered by `blessed` for layout and `chalk` for colorized feedback.
 7.  **Response**: The system returns a synthesized answer accompanied by exact citations (file name, heading, and line numbers) to ensure transparency and eliminate hallucinations.
 
 ## Project Structure
@@ -74,6 +85,11 @@ ask-docs/
   synthesizer.js
   cache.js
   config.js
+  tui.js
+  panel.js
+  verify-models.js
+  server/
+    webServer.js
   vector-store/
 docs/
   overview.md
@@ -108,6 +124,10 @@ web/
 git clone https://github.com/<your-repo>/ask-docs
 cd ask-docs
 npm install
+
+# Download and verify local models
+./download_models.sh
+node verify-models.js
 ```
 
 ## CLI Usage
