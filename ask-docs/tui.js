@@ -67,13 +67,14 @@ export async function runTUI() {
     screen.render();
 
     // Prepare for AI response
-    chatLog.log(`{green-fg}{bold}AI:{/bold}{/green-fg} `);
+    chatLog.log(`{green-fg}{bold}AI:{/bold}{/green-fg} {grey-fg}Thinking...{/grey-fg}`);
     const lines = chatLog.getLines();
     const aiLineIndex = lines.length - 1;
     let currentAnswer = "";
 
     try {
       const response = await askDocs(text, (payload) => {
+        // As soon as we get the first token, the "Thinking..." line is overwritten
         if (payload.token) {
           currentAnswer += payload.token;
           chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} ${currentAnswer}`);
@@ -81,7 +82,7 @@ export async function runTUI() {
         }
       });
 
-      // Update with final answer and stats
+      // Update with final answer (clears "Thinking..." if no tokens were streamed) and stats
       chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} ${response.answer}`);
       chatLog.log(`{grey-fg}Stats: ${response.tps} tps | ${response.tokenCount} tokens{/grey-fg}\n`);
     } catch (err) {
