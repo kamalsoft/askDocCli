@@ -1,7 +1,27 @@
 import fs from "fs";
 import path from "path";
 
+// Simple .env loader to populate process.env for local execution
+try {
+  const envPath = path.resolve(".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    envContent.split(/\r?\n/).forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine && !trimmedLine.startsWith("#")) {
+        const index = trimmedLine.indexOf("=");
+        if (index > 0) {
+          const key = trimmedLine.substring(0, index).trim();
+          const value = trimmedLine.substring(index + 1).trim().replace(/^["']|["']$/g, "");
+          process.env[key] = value;
+        }
+      }
+    });
+  }
+} catch (e) {}
+
 const DEFAULT_CONFIG = {
+  port: 5174,
   appSettings: {
     docsPath: "../docs",
     storePath: "./vector-store/docs.json",
@@ -14,6 +34,7 @@ const DEFAULT_CONFIG = {
     topK: 2,                // Extreme focus: Only send the 2 most relevant chunks.
     confidenceThreshold: 0.12,
     ingestVersion: 1,
+    bm25Only: false,        // If true, skips embedding generation/usage for faster performance
     // ONNX Threading optimization
     intraOpNumThreads: 0,    // 0 = Auto-detect (Let ONNX optimize for your specific CPU)
     interOpNumThreads: 1,    
@@ -24,17 +45,17 @@ const DEFAULT_CONFIG = {
     rerankTopK: 5,          // Reduced to prevent instruction-drift in small models
     enableReranker: true,   // High-fidelity chunk selection
     enableRethink: true,    // Two-pass reasoning
-    inferenceMode: "local", // 'local', 'openrouter', or 'auto' (fallback)
+    inferenceMode: "openrouter", // 'local', 'openrouter', or 'auto' (fallback)
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY || "",
-      model: "google/gemini-2.0-flash-001",
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
       baseUrl: "https://openrouter.ai/api/v1"
     }
   },
   profiles: {
     standard: {}, // Uses defaults above
     fast: {
-      topK: 1,              // Absolute minimum context
+      topK: 2,              // Increased to 2 to prevent missing content when an Index matches
       chunkChars: 500,      // Tiny chunks for fast prefill
       maxNewTokens: 128,    // Shorter answers
       enableRethink: false, // Skip internal reasoning pass
@@ -100,8 +121,7 @@ export function loadConfig() {
   const activeProfileKey = userConfig.appSettings?.activeProfile || DEFAULT_CONFIG.appSettings.activeProfile;
   const profileSettings = DEFAULT_CONFIG.profiles[activeProfileKey] || {};
 
-  // Deep merge appSettings and specifically the openrouter block to preserve defaults
-  return { 
+  const finalConfig = { 
     ...DEFAULT_CONFIG, 
     ...userConfig,
     appSettings: {
@@ -114,4 +134,13 @@ export function loadConfig() {
       }
     }
   };
+
+  // Conflict Resolution: If mode is remote, ensure remote calls are allowed
+  if (finalConfig.appSettings.inferenceMode !== 'local') {
+    if (userConfig.appSettings?.allowRemoteModels === undefined) {
+      finalConfig.appSettings.allowRemoteModels = true;
+    }
+  }
+
+  return finalConfig;
 }

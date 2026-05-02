@@ -4,6 +4,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { askDocs } from "../ask.js";
+import { ingestDocs } from "../ingest.js";
 import { loadConfig } from "../config.js";
 
 const config = loadConfig();
@@ -215,6 +216,18 @@ console.log(`➡ ${parsedUrl} ${pathname}`);
       return sendJSON(res, 500, { error: err.message || "Internal server error" });
     }
     return;
+  }
+
+  // Ingest endpoint (Manual trigger)
+  if (pathname === "/api/ingest" && req.method === "POST") {
+    try {
+      log("Triggering manual ingestion via API...");
+      await ingestDocs();
+      return sendJSON(res, 200, { status: "success", message: "Ingestion complete" });
+    } catch (err) {
+      console.error("Ingest API Error:", err);
+      return sendJSON(res, 500, { error: err.message || "Ingestion failed" });
+    }
   }
 
   // Static hosting for Web UI

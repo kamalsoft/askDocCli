@@ -173,7 +173,7 @@ program
     }
 
     try {
-      const { answer, citations } = await askDocs(question);
+      const { answer, citations, hasMoreContext } = await askDocs(question);
 
       console.log(chalk.yellow.bold("\n🧠 Answer:\n"));
       console.log(answer);
@@ -181,8 +181,12 @@ program
       if (citations && citations.length > 0) {
         console.log(chalk.magenta("\n📎 Citations:"));
         for (const c of citations) {
-          console.log(" - " + c);
+          console.log(" " + c);
         }
+      }
+
+      if (hasMoreContext) {
+        console.log(chalk.gray(`\n💡 Hint: More relevant data was found in docs.json. For a more wholesome response, increase 'topK' in config.`));
       }
 
       const end = performance.now();

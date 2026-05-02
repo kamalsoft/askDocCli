@@ -34,7 +34,7 @@ Create this file in the root directory to override defaults.
     "activeModel": "llama-3.2",
     "openrouter": {
       "apiKey": "sk-or-v1-...",
-      "model": "google/gemini-2.0-flash-001"
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
     }
   }
 }
@@ -129,7 +129,7 @@ Defined in `config.js` under `embeddingModels`. Used for both query vectorizatio
     "activeModel": "llama-3.2",
     "openrouter": {
       "apiKey": "sk-or-v1-YOUR_KEY_HERE",
-      "model": "google/gemini-2.0-flash-001"
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
     }
   }
 }
@@ -192,7 +192,7 @@ For maximum security, Ask-Docs can be deployed on machines without network inter
         }
         ```
 -   **`model`**: The specific model identifier to use from OpenRouter. You can find a list of available models on the OpenRouter website.
-    *   **Default:** `"google/gemini-2.0-flash-001"`
+    *   **Default:** `"nvidia/nemotron-3-super-120b-a12b:free"`
 -   **`baseUrl`**: The base URL for the OpenRouter API.
     *   **Default:** `"https://openrouter.ai/api/v1"`
 

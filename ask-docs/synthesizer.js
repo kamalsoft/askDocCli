@@ -30,26 +30,37 @@ function isLooping(text) {
 /**
  * Handles inference via OpenRouter API
  */
-async function synthesizeOpenRouterAnswer(question, context, onToken) {
+async function synthesizeOpenRouterAnswer(question, initialContext, onToken, searchTool) {
   const config = loadConfig();
   const { apiKey, model, baseUrl } = config.appSettings.openrouter;
+  let context = initialContext;
+  let iterations = 0;
+  const MAX_ITERATIONS = 2;
 
   if (!apiKey) {
     throw new Error("OpenRouter API Key is missing. Set it in ask-docs.config.json or OPENROUTER_API_KEY env var.");
   }
 
-  const systemMessage = `You are a documentation assistant.
-Strict Rules:
-1. Answer ONLY using the provided Context. 
-2. If the context is insufficient, say "I am sorry, but the documentation does not contain this information."
-3. Use numerical citations like [1], [2] based on the context snippets.
+  const systemMessage = `You are a world-class documentation expert. Your goal is to provide high-fidelity answers based strictly on the provided Context.
+
+STRICT OPERATING RULES:
+1. GROUNDING: Answer ONLY using information from the Context. If it's not in the context, you do not know it.
+2. CITATIONS: You MUST use numerical citations like [1], [2] corresponding to the [[N]] markers in the Context.
+3. UNCERTAINTY: If the Context is empty or clearly does not contain the answer, say: "I am sorry, but the documentation does not contain this information."
+4. AGENTIC SEARCH: If the Context mentions a topic or section (like a Table of Contents) but does not provide the detailed content, you MUST use: <search>query</search> to retrieve the actual details.
+5. NO REPETITION: If a previous search result is marked as "Additional Search Results" and still doesn't help, do not keep searching for the same thing.
+6. SOURCE ANALYSIS: Look at source filenames. If the context is from "index.md" or "sidebar.md", it is likely just a link; search for the topic immediately.
+7. ACCURACY CHECK: Silently re-verify every claim against the Context source text before answering.
 
 Format:
-<thought> Analyze the context and plan the answer </thought>
-<answer> Concise response with citations </answer>`;
+<thought> 1. Analyze question. 2. Locate answers in Context [[N]]. 3. Silently verify accuracy against source. 4. Plan answer. </thought>
+<answer>
+Final response text with [N] citations.
+</answer>`;
 
-  const userContent = `Context:\n"""\n${context}\n"""\n\nQuestion: ${question}`;
-
+  while (iterations <= MAX_ITERATIONS) {
+    const userContent = `Context:\n"""\n${context}\n"""\n\nQuestion: ${question}`;
+    
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -75,6 +86,18 @@ Format:
   if (!onToken) {
     const data = await response.json();
     const fullText = data.choices[0].message.content;
+
+    // Check for Tool Use (Agentic Search)
+    const searchMatch = fullText.match(/<search>(.*?)<\/search>/i);
+    if (searchMatch && searchTool && iterations < MAX_ITERATIONS) {
+      const searchQuery = searchMatch[1].trim();
+      console.log(`🤖 Agent requesting additional search (OpenRouter): "${searchQuery}"`);
+      const additionalContext = await searchTool(searchQuery);
+      context += `\n\n--- Additional Search Results (Step ${iterations + 1}) ---\n${additionalContext}`;
+      iterations++;
+      continue;
+    }
+
     return parseResponse(fullText);
   }
 
@@ -112,7 +135,21 @@ Format:
     }
   }
 
+  // Check for Tool Use AFTER streaming
+  const searchMatch = fullText.match(/<search>(.*?)<\/search>/i);
+  if (searchMatch && searchTool && iterations < MAX_ITERATIONS) {
+    const searchQuery = searchMatch[1].trim();
+    console.log(`🤖 Agent requesting additional search (OpenRouter): "${searchQuery}"`);
+    if (onToken) onToken({ type: "status", text: `Searching for more info: ${searchQuery}...` });
+    
+    const additionalContext = await searchTool(searchQuery);
+    context += `\n\n--- Additional Search Results (Step ${iterations + 1}) ---\n${additionalContext}`;
+    iterations++;
+    return await synthesizeOpenRouterAnswer(question, context, onToken, searchTool);
+  }
+
   return parseResponse(fullText);
+  }
 }
 
 function parseResponse(fullText) {
@@ -121,21 +158,30 @@ function parseResponse(fullText) {
   return { answer, tps: "N/A", tokenCount: fullText.length / 4 }; // Approximation
 }
 
-export async function synthesizeAnswer(question, context, onToken = null, retryAttempt = 0) {
+/**
+ * Synthesizes an answer using an agentic loop.
+ * @param {string} question - The user query.
+ * @param {string} initialContext - The first batch of retrieved chunks.
+ * @param {Function} onToken - Callback for streaming.
+ * @param {number} retryAttempt - Internal retry counter.
+ * @param {Function} searchTool - Optional async function to perform additional searches: (query) => Promise<string>
+ */
+export async function synthesizeAnswer(question, initialContext, onToken = null, retryAttempt = 0, searchTool = null) {
   const config = loadConfig();
   const settings = config.appSettings;
+  let context = initialContext;
+  let iterations = 0;
+  const MAX_ITERATIONS = 2; // Allow up to 2 additional search steps
 
   if (settings.inferenceMode === "openrouter") {
     return synthesizeOpenRouterAnswer(question, context, onToken);
   }
 
   if (settings.inferenceMode === "auto") {
-    try {
-      return await synthesizeOpenRouterAnswer(question, context, onToken);
-    } catch (err) {
+    try { return await synthesizeOpenRouterAnswer(question, context, onToken); }
+    catch (err) {
       console.warn(`⚠️ OpenRouter failed: ${err.message}. Falling back to local model.`);
       if (onToken) onToken({ type: "status", text: "OpenRouter unavailable. Falling back to local model..." });
-      // Continue to local inference logic below
     }
   }
 
@@ -256,18 +302,25 @@ export async function synthesizeAnswer(question, context, onToken = null, retryA
   const rethinkEnabled = settings.enableRethink ?? true;
   const thoughtMarker = rethinkEnabled ? `${t.assistant}<thought>\n` : `${t.assistant}<answer>\n`;
 
-  // Strict grounding prompt for 1B models with citation instructions
-  const prompt = `${t.system}You are a documentation assistant.
-Strict Rules:
-1. Answer ONLY using the provided Context. 
-2. If the context is insufficient, say "I am sorry, but the documentation does not contain this information."
-3. Use numerical citations like [1], [2] based on the context snippets.
+  const systemRules = `${t.system}You are a world-class documentation expert.
+
+STRICT OPERATING RULES:
+1. GROUNDING: Answer ONLY using information from the Context. External knowledge is forbidden.
+2. CITATIONS: You MUST use numerical citations like [1], [2] corresponding to the [[N]] markers in the Context.
+3. UNCERTAINTY: If the Context is insufficient, say: "I am sorry, but the documentation does not contain this information."
+4. AGENTIC SEARCH: If the Context is a list or index, use: <search>topic</search> to find the actual content.
+5. BREVITY: Be technical and concise.
+6. ACCURACY CHECK: Silently verify every sentence against Context [[N]] for 100% precision.
 
 Format:
-<thought> Analyze the context and plan the answer </thought>
-<answer> Concise response with citations </answer>
+<thought> 1. Locate answers in Context [[N]]. 2. Re-verify accuracy against source. 3. Plan answer. </thought>
+<answer>
+Response with [N] citations.
+</answer>`;
 
-${t.user}Context:
+  // Main Agentic Loop
+  while (iterations <= MAX_ITERATIONS) {
+    const prompt = `${systemRules}\n\n${t.user}Context:
 """
 ${context}
 """
@@ -289,6 +342,21 @@ Question: ${question}${thoughtMarker}`;
 
   const durationMs = Date.now() - startTime;
   const fullText = output[0].generated_text;
+
+    // Check for Tool Use (Agentic Search)
+    const searchMatch = fullText.match(/<search>(.*?)<\/search>/i);
+    if (searchMatch && searchTool && iterations < MAX_ITERATIONS) {
+      const searchQuery = searchMatch[1].trim();
+      console.log(`🤖 Agent requesting additional search: "${searchQuery}"`);
+      if (onToken) onToken({ type: "status", text: `Searching for more info: ${searchQuery}...` });
+      
+      const additionalContext = await searchTool(searchQuery);
+      context += `\n\n--- Additional Search Results (Step ${iterations + 1}) ---\n${additionalContext}`;
+      
+      iterations++;
+      continue; // Re-run synthesis with enriched context
+    }
+
   const tokenCount = fullText.split(/\s+/).length; // Rough estimate
   const tps = (tokenCount / (durationMs / 1000)).toFixed(2);
   
@@ -316,9 +384,6 @@ Question: ${question}${thoughtMarker}`;
     return { answer, tps, tokenCount };
   }
 
-  return { 
-    answer: fullText.trim(), 
-    tps, 
-    tokenCount 
-  };
+    return { answer: fullText.trim(), tps, tokenCount };
+  }
 }

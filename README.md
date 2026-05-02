@@ -71,7 +71,7 @@ graph LR
 4.  **Vector Store**: The resulting vectors and their corresponding text segments are stored in a local `docs.json` file.
 5.  **Similarity Search**: When you ask a question, it is converted into a vector using the same local model. A dot-product calculation finds the most relevant chunks in your documentation.
 6.  **Context-Restricted Synthesis**:
-    *   **The Prompt**: The system merges the top 5 chunks into a specialized prompt: *"Rewrite the answer using ONLY the information in the context. Do NOT invent details. Write a clear, concise answer in 3–5 sentences."*
+    *   **The Prompt**: The system merges the most relevant chunks (default: 2) into a specialized prompt: *"Rewrite the answer using ONLY the information in the context. Do NOT invent details. Write a clear, concise answer in 3–5 sentences."*
     *   **The Model**: In `local` mode, **Llama 3.2 1B** (via `transformers`) handles reasoning. In `openrouter` mode, `fetch` is used to call remote LLMs.
     *   **User Interface**: The Terminal UI is powered by `blessed` for layout and `chalk` for colorized feedback.
 7.  **Response**: The system returns a synthesized answer accompanied by exact citations (file name, heading, and line numbers) to ensure transparency and eliminate hallucinations.
@@ -210,7 +210,7 @@ Includes:
 ## Chunking Strategy
 
 - Heading‑aware
-- 1200–1500 characters per chunk
+- ~600 characters per chunk (optimized for 1B-3B parameter models)
 - Each chunk includes:
   - file
   - heading
@@ -383,6 +383,8 @@ The system provides a RESTful interface for integration with internal dashboards
 | :--- | :--- | :--- |
 | `GET`  | `/api/docs/list` | Returns a list of all indexed Markdown files. |
 | `GET`  | `/api/docs/get?name=...` | Returns the raw text of a specific document. |
+| `GET`  | `/api/docs/search?q=...` | Case-insensitive search of document filenames. |
+| `GET`  | `/api/models/summary` | Check health and LFS status of local reasoning models. |
 | `POST` | `/ask` | **Core RAG Query**: Accepts `{"question": "..."}`. Supports streaming via `Accept: text/event-stream`. |
 | `POST` | `/api/ingest` | **Trigger Ingestion**: Forces a re-scan of the `docsPath` and updates the vector store. |
 

@@ -13,10 +13,28 @@ function validateModels(config) {
   const modelInfo = config.reasoningModels[modelKey];
   const embedInfo = config.embeddingModels["jina-v2"];
 
-  const modelChecks = [
-    { info: embedInfo, relPath: path.join(embedInfo.repo, embedInfo.targetFile) },
-    { info: modelInfo, relPath: path.join(modelInfo.repo, modelInfo.targetFile) }
-  ];
+  // Check for OpenRouter configuration
+  const mode = settings.inferenceMode;
+  if (mode === 'openrouter' || mode === 'auto') {
+    if (!settings.openrouter.apiKey) {
+      if (mode === 'openrouter') {
+        console.error("❌ Error: Inference mode is set to 'openrouter' but no API Key was found.");
+        console.error("💡 Set OPENROUTER_API_KEY in .env or ask-docs.config.json");
+        process.exit(1);
+      }
+      console.warn("⚠️  Warning: Inference mode is 'auto' but OpenRouter API Key is missing. Fallback to local model will be forced.");
+    }
+  }
+
+  const modelChecks = [];
+
+  // Only check for embedding model if not in BM25-only mode
+  if (!settings.bm25Only) {
+    modelChecks.push({ info: embedInfo, relPath: path.join(embedInfo.repo, embedInfo.targetFile) });
+  }
+
+  // Always check for reasoning model
+  modelChecks.push({ info: modelInfo, relPath: path.join(modelInfo.repo, modelInfo.targetFile) });
 
   if (modelInfo.isSplit) {
     modelChecks.push({ 
@@ -71,11 +89,26 @@ function verifyStoreIntegrity(storePath, expectedVersion) {
   }
 }
 
+async function testOpenRouterConnectivity(config) {
+  const { apiKey, baseUrl } = config.appSettings.openrouter;
+  if (!apiKey) return;
+
+  process.stdout.write("📡 Testing OpenRouter connection... ");
+  try {
+    const res = await fetch(`${baseUrl}/models`, { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    if (res.ok) console.log("✅");
+    else console.log("⚠️  (API reachable, but key may be invalid)");
+  } catch (e) {
+    console.log(`❌ (Failed: ${e.message})`);
+  }
+}
+
 export async function ingestDocs({ force = false, debug = false } = {}) {
   const config = loadConfig();
 
   // Fail fast if models are missing or corrupt
   validateModels(config);
+  if (config.appSettings.inferenceMode !== 'local') await testOpenRouterConnectivity(config);
 
   const settings = config.appSettings;
   const cache = loadCache();
@@ -124,8 +157,12 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
       const sections = splitIntoChunks(text, file, settings.chunkChars);
 
       for (const sec of sections) {
-        const embedding = await embed(sec.text);
-        newChunks.push({ ...sec, embedding });
+        let embedding = null;
+        // Skip embedding generation if BM25-only is enabled
+        if (!settings.bm25Only) {
+          embedding = await embed(sec.text);
+        }
+        newChunks.push({ ...sec, embedding: embedding });
       }
 
       updateFileEntry(file, text, cache);
@@ -139,11 +176,16 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
   updateCacheMeta(cache);
   saveCache(cache);
   
+  // Calculate BM25 stats before saving
+  console.log("📊 Pre-calculating BM25 statistics...");
+  const bm25 = calculateBM25Stats(newChunks);
+
   // Structured save with metadata
   const storeData = {
     version: settings.ingestVersion,
     model: settings.activeModel,
     createdAt: new Date().toISOString(),
+    bm25Stats: bm25, // Persist stats for hybrid search
     chunks: newChunks
   };
 
@@ -189,6 +231,34 @@ function splitIntoChunks(text, file, size) {
   }
 
   return chunks;
+}
+
+function tokenize(text) {
+  return text.toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 1);
+}
+
+/**
+ * Computes corpus-wide BM25 statistics
+ */
+function calculateBM25Stats(chunks) {
+  const docCount = chunks.length;
+  if (docCount === 0) return null;
+
+  let totalLen = 0;
+  const df = {}; // document frequency
+
+  chunks.forEach(chunk => {
+    const tokens = tokenize(chunk.text);
+    totalLen += tokens.length;
+    new Set(tokens).forEach(t => df[t] = (df[t] || 0) + 1);
+  });
+
+  const idf = {};
+  for (const term in df) {
+    idf[term] = Math.log((docCount - df[term] + 0.5) / (df[term] + 0.5) + 1);
+  }
+
+  return { avgdl: totalLen / docCount, idf };
 }
 
 function extractHeading(lines) {

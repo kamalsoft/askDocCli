@@ -5,6 +5,9 @@
   "bin": {
     "ask-docs": "./cli.js"
   },
+  "scripts": {
+    "web": "node server/webServer.js"
+  },
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",
     "blessed": "^0.1.81",
