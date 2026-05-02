@@ -90,31 +90,14 @@ export async function openPanelUI() {
        QUERY HANDLER
     ------------------------------ */
     async function runQuery(q) {
-      const result = await askDocs(q);
+      const { answer, citations, sections } = await askDocs(q);
 
-      const lines = result.trim().split("\n");
-      const answerLines = [];
-      const citationLines = [];
+      answerBox.setContent(answer);
+      citationsBox.setContent(citations.join("\n"));
 
-      let inCitations = false;
-
-      for (const l of lines) {
-        if (l.includes("--- CITATIONS ---")) {
-          inCitations = true;
-          continue;
-        }
-        if (!inCitations) answerLines.push(l);
-        else citationLines.push(l);
+      if (sections && sections.length > 0) {
+        sectionsBox.setItems(sections.map(s => `${s.file} > ${s.heading}`));
       }
-
-      answerBox.setContent(answerLines.join("\n"));
-      citationsBox.setContent(citationLines.join("\n"));
-
-      sectionsBox.setItems([
-        "Top Section",
-        "Related Section",
-        "More Context"
-      ]);
 
       screen.render();
     }

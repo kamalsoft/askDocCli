@@ -7,6 +7,8 @@ import { performance } from "perf_hooks";
 import { ingestDocs } from "./ingest.js";
 import { clearCache } from "./cache.js";
 import { askDocs } from "./ask.js";
+import { runTUI } from "./tui.js";
+import { openPanelUI } from "./panel.js";
 
 const program = new Command();
 
@@ -195,6 +197,26 @@ program
       console.error(chalk.red("\n❌ Ask failed:"), err.message || err);
       process.exitCode = 1;
     }
+  });
+
+/* -------------------------------------------------------
+   TUI command
+------------------------------------------------------- */
+program
+  .command("tui")
+  .description("Launch an interactive Terminal User Interface")
+  .action(async () => {
+    await runTUI();
+  });
+
+/* -------------------------------------------------------
+   Panel command
+------------------------------------------------------- */
+program
+  .command("panel")
+  .description("Launch the side-by-side dashboard TUI")
+  .action(async () => {
+    await openPanelUI();
   });
 
 program.parse(process.argv);

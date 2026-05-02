@@ -1,115 +1,95 @@
-import readline from "readline";
-import { askDocs } from "./ask.js";
-import { openPanelUI } from "./panel.js";
+import blessed from 'blessed';
+import { askDocs } from './ask.js';
 
-/* -------------------------------------------------------
-   Built‑in text wrapper
-------------------------------------------------------- */
-function wrap(text, width = 80) {
-  const words = text.split(" ");
-  let line = "";
-  const lines = [];
-
-  for (const w of words) {
-    if ((line + w).length > width) {
-      lines.push(line.trim());
-      line = "";
-    }
-    line += w + " ";
-  }
-
-  if (line.trim().length > 0) {
-    lines.push(line.trim());
-  }
-
-  return lines.join("\n");
-}
-
-/* -------------------------------------------------------
-   Chat Mode (Terminal.app safe)
-------------------------------------------------------- */
-export async function askDocsTUI() {
-  console.clear();
-  console.log("📘 ask-docs interactive mode");
-  console.log("Type your question. Press F2 for panel mode. Ctrl+C to exit.\n");
-
-  // CRITICAL FIX: raw mode OFF
-  if (process.stdin.isTTY) process.stdin.setRawMode(false);
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: "ask-docs> "
+/**
+ * Launches the Terminal User Interface for interactive chat.
+ */
+export async function runTUI() {
+  const screen = blessed.screen({
+    smartCSR: true,
+    title: 'Ask-Docs TUI',
+    fullUnicode: true
   });
 
-  readline.emitKeypressEvents(process.stdin);
-
-  process.stdin.on("keypress", async (str, key) => {
-    if (key.name === "f2") {
-      // CRITICAL FIX: remove all listeners + raw mode OFF
-      process.stdin.removeAllListeners("keypress");
-      if (process.stdin.isTTY) process.stdin.setRawMode(false);
-
-      rl.pause();
-
-      console.clear();
-      await openPanelUI();
-
-      // Restore chat mode cleanly
-      console.clear();
-      console.log("📘 Returned to chat mode\n");
-
-      readline.emitKeypressEvents(process.stdin);
-      if (process.stdin.isTTY) process.stdin.setRawMode(false);
-
-      rl.resume();
-      rl.prompt();
+  // Main conversation area
+  const chatLog = blessed.log({
+    parent: screen,
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%-3',
+    border: 'line',
+    label: ' {bold}Conversation{/bold} ',
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollback: 1000,
+    scrollbar: {
+      ch: ' ',
+      track: { bg: 'cyan' },
+      style: { inverse: true }
+    },
+    style: {
+      border: { fg: 'blue' }
     }
   });
 
-  rl.prompt();
+  // Input area at the bottom
+  const input = blessed.textbox({
+    parent: screen,
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: 3,
+    border: 'line',
+    label: ' {bold}Ask a question (Enter to send, Esc to quit){/bold} ',
+    tags: true,
+    inputOnFocus: true,
+    style: {
+      border: { fg: 'green' }
+    }
+  });
 
-  rl.on("line", async (line) => {
-    const question = line.trim();
-    if (!question) {
-      rl.prompt();
+  // Global exit keys
+  screen.key(['escape', 'C-c'], () => process.exit(0));
+
+  input.on('submit', async (text) => {
+    if (!text || text.trim() === '') {
+      input.focus();
       return;
     }
 
-    console.log("\n🔍 Searching...\n");
+    // Display user question
+    chatLog.log(`{blue-fg}{bold}You:{/bold}{/blue-fg} ${text}`);
+    input.clearValue();
+    input.focus();
+    screen.render();
+
+    // Prepare for AI response
+    chatLog.log(`{green-fg}{bold}AI:{/bold}{/green-fg} `);
+    const lines = chatLog.getLines();
+    const aiLineIndex = lines.length - 1;
+    let currentAnswer = "";
 
     try {
-      const result = await askDocs(question);
-
-      const lines = result.trim().split("\n");
-      const answerLines = [];
-      const citationLines = [];
-
-      let inCitations = false;
-
-      for (const l of lines) {
-        if (l.includes("--- CITATIONS ---")) {
-          inCitations = true;
-          continue;
+      const response = await askDocs(text, (payload) => {
+        if (payload.token) {
+          currentAnswer += payload.token;
+          chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} ${currentAnswer}`);
+          screen.render();
         }
-        if (!inCitations) answerLines.push(l);
-        else citationLines.push(l);
-      }
+      });
 
-      console.log("🟦 Answer:\n");
-      console.log(wrap(answerLines.join(" "), 80) + "\n");
-
-      console.log("📎 Citations:");
-      console.log(citationLines.join("\n") || "No citations\n");
+      // Update with final answer and stats
+      chatLog.setLine(aiLineIndex, `{green-fg}{bold}AI:{/bold}{/green-fg} ${response.answer}`);
+      chatLog.log(`{grey-fg}Stats: ${response.tps} tps | ${response.tokenCount} tokens{/grey-fg}\n`);
     } catch (err) {
-      console.error("❌ Error:", err.message);
+      chatLog.log(`{red-fg}Error: ${err.message}{/red-fg}\n`);
     }
-
-    rl.prompt();
+    screen.render();
   });
 
-  rl.on("close", () => {
-    console.log("\nGoodbye!");
-    process.exit(0);
-  });
+  input.focus();
+  screen.render();
 }
