@@ -377,10 +377,18 @@ Includes:
 
 ## API Endpoints
 
-```
-GET /api/docs/list
-GET /api/docs/get?name=<file>
-POST /ask
+The system provides a RESTful interface for integration with internal dashboards or 3rd-party automation tools.
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET`  | `/api/docs/list` | Returns a list of all indexed Markdown files. |
+| `GET`  | `/api/docs/get?name=...` | Returns the raw text of a specific document. |
+| `POST` | `/ask` | **Core RAG Query**: Accepts `{"question": "..."}`. Supports streaming via `Accept: text/event-stream`. |
+| `POST` | `/api/ingest` | **Trigger Ingestion**: Forces a re-scan of the `docsPath` and updates the vector store. |
+
+**Example: Triggering Ingestion via Curl**
+```bash
+curl -X POST http://localhost:5174/api/ingest
 ```
 
 

@@ -163,6 +163,25 @@ Defines the model used to turn your documents into searchable vectors.
 
 ---
 *Note: If you use the `auto` mode and have no internet connection, the system will pause briefly for the API timeout before switching to the local ONNX model.*
+
+## 7. Data Security & Encryption
+
+The vector store (`docs.json`) contains the semantic representation and raw text of your indexed documents. Protecting this file is essential for maintaining data privacy.
+
+### 7.1 Security at Rest
+The vector store is currently stored as a standard JSON file. It is **not encrypted by the application itself**. To ensure data remains secure while the machine is offline or unattended, it is recommended to:
+*   Use **Full Disk Encryption** (e.g., FileVault on macOS, BitLocker on Windows, or LUKS on Linux).
+*   Configure file system permissions on the `vector-store/` directory so that only the user account running the application has read/write access.
+
+### 7.2 Integrity and Hashing
+During the `ingest` phase, the system generates SHA-256 hashes for every document. These are stored in `cache.json`. This mechanism ensures that the vector store accurately reflects the state of your local `docs/` folder and allows the system to detect if source files have been modified since the last index.
+
+### 7.3 Network Isolation
+*   **Local Mode**: When `inferenceMode` is set to `local`, no document data or user queries ever reach the network.
+*   **Remote Mode**: In `openrouter` or `auto` modes, only the specific chunks of text retrieved as context are sent over an encrypted HTTPS connection to the reasoning model. The full vector store is never uploaded.
+
+### 7.4 Air-Gap Strategy
+For maximum security, Ask-Docs can be deployed on machines without network interfaces (air-gapped) once the necessary ONNX models have been downloaded and verified using the provided `verify-models.js` script.
         ```json
         {
           "appSettings": {
