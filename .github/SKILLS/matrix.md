@@ -30,7 +30,7 @@ Responsible for the browser-based documentation portal and visual UX.
 ### 3. System/CLI Engineer
 Responsible for the core orchestration, performance, and terminal interfaces.
 - **Ownership**: Asynchronous ingestion pipeline, TUI development, CLI command structure, and configuration hierarchy.
-- **Key Files**: `cli.js`, `tui.js`, `panel.js`, `ingest.js`, `server/webServer.js`.
+- **Key Files**: `cli.js`, `tui.js`, `panel.js`, `ingest.js`, `ask-docs-UI/uiServer.js`.
 
 ---
 *Note: All roles share the responsibility for maintaining the project's Privacy NFR, ensuring that no document data is leaked to external APIs regardless of the inference pathway used.*

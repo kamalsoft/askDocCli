@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // Simple .env loader to populate process.env for local execution
 try {
-  const envPath = path.resolve(".env");
+  const __dirname_config = path.dirname(fileURLToPath(import.meta.url));
+  const envPath = path.join(__dirname_config, ".env");
   if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, "utf8");
     envContent.split(/\r?\n/).forEach(line => {
@@ -45,7 +47,7 @@ const DEFAULT_CONFIG = {
     rerankTopK: 5,          // Reduced to prevent instruction-drift in small models
     enableReranker: true,   // High-fidelity chunk selection
     enableRethink: true,    // Two-pass reasoning
-    inferenceMode: "openrouter", // 'local', 'openrouter', or 'auto' (fallback)
+    inferenceMode: "local", // Default to local for stability; override in ask-docs.config.json
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY || "",
       model: "nvidia/nemotron-3-super-120b-a12b:free",
@@ -112,12 +114,12 @@ const DEFAULT_CONFIG = {
 
 export function loadConfig() {
   const configPath = path.resolve("ask-docs.config.json");
+  let userConfig = {};
 
-  if (!fs.existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG };
+  if (fs.existsSync(configPath)) {
+    userConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
   }
 
-  const userConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
   const activeProfileKey = userConfig.appSettings?.activeProfile || DEFAULT_CONFIG.appSettings.activeProfile;
   const profileSettings = DEFAULT_CONFIG.profiles[activeProfileKey] || {};
 

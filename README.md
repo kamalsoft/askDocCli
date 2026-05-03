@@ -125,6 +125,9 @@ git clone https://github.com/<your-repo>/ask-docs
 cd ask-docs
 npm install
 
+# Build the Web UI
+npm run build:web
+
 # Download and verify local models
 ./download_models.sh
 node verify-models.js
@@ -377,7 +380,7 @@ Includes:
 
 ## API Endpoints
 
-The system provides a RESTful interface for integration with internal dashboards or 3rd-party automation tools.
+The system provides a RESTful interface for the Web UI and 3rd-party automation tools.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -385,8 +388,20 @@ The system provides a RESTful interface for integration with internal dashboards
 | `GET`  | `/api/docs/get?name=...` | Returns the raw text of a specific document. |
 | `GET`  | `/api/docs/search?q=...` | Case-insensitive search of document filenames. |
 | `GET`  | `/api/models/summary` | Check health and LFS status of local reasoning models. |
+| `GET`  | `/api/config` | Returns the current active inference mode and app settings. |
+| `POST` | `/api/config` | Update application settings (e.g., toggle `bm25Only`). |
+| `POST` | `/api/models/verify` | Trigger full integrity check of models and API keys. |
 | `POST` | `/ask` | **Core RAG Query**: Accepts `{"question": "..."}`. Supports streaming via `Accept: text/event-stream`. |
 | `POST` | `/api/ingest` | **Trigger Ingestion**: Forces a re-scan of the `docsPath` and updates the vector store. |
+
+### SSE Streaming Protocol
+When requesting streaming via `/ask`, the server emits standard `data: ` JSON payloads:
+
+1.  **Thought Tokens**: `{"type": "thought", "text": "..."}` - Use to show "Thinking" progress.
+2.  **Answer Start**: `{"type": "answer_start"}` - Signal to switch from thinking to answering view.
+3.  **Answer Tokens**: `{"type": "answer", "text": "..."}` - The actual response body.
+4.  **Agentic Status**: `{"type": "status", "text": "..."}` - Used when the agent triggers an additional search loop.
+5.  **Final Payload**: `{"done": true, "answer": "...", "citations": [...], "hasMoreContext": true, "tps": 12.5}`
 
 **Example: Triggering Ingestion via Curl**
 ```bash

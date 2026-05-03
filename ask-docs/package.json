@@ -6,7 +6,8 @@
     "ask-docs": "./cli.js"
   },
   "scripts": {
-    "web": "node server/webServer.js"
+    "web": "node server/webServer.js",
+    "build:web": "cd web && npm install && npm run build"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",
