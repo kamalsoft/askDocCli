@@ -3,10 +3,6 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/documentation/get",
-      "destination": "/api/documentation/get.js"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "https://YOUR_ENGINE_API_URL/api/$1"
     },
