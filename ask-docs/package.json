@@ -6,8 +6,7 @@
     "ask-docs": "./cli.js"
   },
   "scripts": {
-    "web": "node server/webServer.js",
-    "build:web": "cd web && npm install && npm run build"
+    "test": "echo \"No engine tests defined yet\" && exit 0"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",

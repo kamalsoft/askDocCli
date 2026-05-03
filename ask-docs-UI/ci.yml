@@ -1,0 +1,42 @@
+name: askDocs CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  engine-check:
+    name: ask-docs (Engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ask-docs/package-lock.json
+      - name: Install dependencies
+        run: cd ask-docs && npm install
+      - name: Validation
+        run: cd ask-docs && npm test
+
+  ui-check:
+    name: ask-docs-UI (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ask-docs-UI/package-lock.json
+      - name: Install dependencies
+        run: cd ask-docs-UI && npm install
+      - name: Production Build
+        run: cd ask-docs-UI && npm run build
+      - name: Validation
+        run: cd ask-docs-UI && npm test

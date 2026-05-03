@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/documentation/get",
-      "destination": "/api/documentation/get.js"
+      "destination": "/api/get.js"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "https://YOUR_ENGINE_API_URL/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://YOUR_ENGINE_API_URL/api/:path*"
     },
     {
       "source": "/ask",

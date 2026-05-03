@@ -1,6 +1,6 @@
-// /Users/kamalsoft/dev/Project/askDocCli/ask-docs-UI/api/documentation/get.js
+// Vercel serverless function to serve documentation guides
 
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 
 export default async function handler(req, res) {
@@ -14,24 +14,23 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { name } = req.query; // Vercel serverless functions parse query params into req.query
+    const { name } = req.query;
 
     if (!name) {
-      return res.status(400).send('Missing "name" query parameter.');
+      return res.status(400).json({ error: 'Missing "name" query parameter.' });
     }
 
-    // IMPORTANT: Assuming 'documentation' folder is now inside 'ask-docs-UI'
-    const filePath = path.join(process.cwd(), 'documentation', name);
+    // Look for the documentation folder relative to the build output
+    const filePath = path.resolve(process.cwd(), 'documentation', name);
 
     try {
-      const content = await fs.promises.readFile(filePath, 'utf8');
+      const content = await fs.readFile(filePath, 'utf8');
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.status(200).send(content);
     } catch (error) {
-      console.error(`Error reading documentation file ${name}:`, error);
-      return res.status(404).send('Documentation file not found.');
+      return res.status(404).json({ error: 'Documentation guide not found.' });
     }
   }
 
-  return res.status(405).send('Method Not Allowed');
+  return res.status(405).json({ error: 'Method Not Allowed' });
 }
