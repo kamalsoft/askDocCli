@@ -23,41 +23,6 @@ const PORT = config.port || 5174;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let docsWatcher = null;
-
-/**
- * Orchestrates the file system watcher for the docs folder.
- */
-function updateWatcher(enabled) {
-  if (enabled && !docsWatcher) {
-    const docsPath = path.resolve(config.appSettings.docsPath);
-    log(`👀 Starting Watch Mode on: ${docsPath}`);
-    
-    let isIngesting = false;
-    docsWatcher = fs.watch(docsPath, { recursive: true }, async (eventType, filename) => {
-      if (filename && filename.endsWith(".md") && !isIngesting) {
-        isIngesting = true;
-        await new Promise(r => setTimeout(r, 500)); // Debounce
-        log(`♻️  Change detected in ${filename}. Re-ingesting...`);
-        try {
-          await ingestDocs({ force: false });
-          log(`✅ Auto-update complete.`);
-        } catch (err) {
-          log(`❌ Auto-update failed: ${err.message}`);
-        }
-        isIngesting = false;
-      }
-    });
-  } else if (!enabled && docsWatcher) {
-    log(`🛑 Stopping Watch Mode.`);
-    docsWatcher.close();
-    docsWatcher = null;
-  }
-}
-
-// Initialize watcher based on initial config
-updateWatcher(config.appSettings.watchMode);
-
 function log(msg) {
   console.log(`🖥️  [UI-Server] ${msg}`);
 }
@@ -231,7 +196,6 @@ const server = http.createServer(async (req, res) => {
       fs.writeFileSync(configPath, JSON.stringify(userConfig, null, 2));
       
       Object.assign(config.appSettings, updates);
-      if (updates.watchMode !== undefined) updateWatcher(updates.watchMode);
 
       // Mask key in response after update
       const safeSettings = JSON.parse(JSON.stringify(config.appSettings));
@@ -242,6 +206,22 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { status: "success", settings: safeSettings });
     } catch (err) {
       return sendJSON(res, 500, { error: "Failed to update configuration" });
+    }
+  }
+
+  // Reset configuration to factory defaults
+  if (pathname === "/api/config/reset" && req.method === "POST") {
+    try {
+      const configPath = path.resolve("ask-docs.config.json");
+      if (fs.existsSync(configPath)) {
+        fs.unlinkSync(configPath);
+        log("User configuration deleted. Reverting to factory defaults.");
+      }
+      const freshConfig = loadConfig();
+      Object.assign(config, freshConfig);
+      return sendJSON(res, 200, { status: "success", settings: config.appSettings });
+    } catch (err) {
+      return sendJSON(res, 500, { error: "Failed to reset configuration" });
     }
   }
 

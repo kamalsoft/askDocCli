@@ -6,6 +6,12 @@
     "authentication.md": {
       "hash": "5dd6459f3bb6f20af8915dc37c2702e45c1c9cc31a3b80360d2c0de3a67a0be8"
     },
+    "diagrams/system-architecture.md": {
+      "hash": "e18d5cb54c2c96be679f09ce61818ff46b2c7a6ece1890ae5171c171119cc47f"
+    },
+    "diagrams/transaction-flow.md": {
+      "hash": "b9702611081d0de546e714027198ad296076b395dd40b34ffa227602d9f46bc8"
+    },
     "errors.md": {
       "hash": "2230357ea92093fccd21d5637ca8e0a6f1355605af79247925f6557031bf8c56"
     },
@@ -32,12 +38,6 @@
     },
     "webhook-events.md": {
       "hash": "308fd4c70c66dd2de2f430c1b687f068d4be2f1308a6455a5503e216b5928ce6"
-    },
-    "diagrams/system-architecture.md": {
-      "hash": "e18d5cb54c2c96be679f09ce61818ff46b2c7a6ece1890ae5171c171119cc47f"
-    },
-    "diagrams/transaction-flow.md": {
-      "hash": "b9702611081d0de546e714027198ad296076b395dd40b34ffa227602d9f46bc8"
     }
   }
 }

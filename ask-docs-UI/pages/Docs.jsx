@@ -78,18 +78,18 @@ const Docs = () => {
   const filteredFiles = files.filter(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div style={{ display: 'flex', gap: '30px', height: 'calc(100vh - 150px)' }}>
+    <div style={{ display: 'flex', gap: '0', maxWidth: '1600px', margin: '0 auto', height: 'calc(100vh - 120px)', color: '#f8fafc' }}>
       {/* File Explorer Sidebar */}
-      <aside style={{ width: '260px', flexShrink: 0, borderRight: '1px solid #eee', paddingRight: '20px', overflowY: 'auto' }}>
-        <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📁</span> Explorer
+      <aside style={{ width: '300px', flexShrink: 0, borderRight: '1px solid #1e293b', padding: '2rem 1.5rem', background: '#0f172a', overflowY: 'auto' }}>
+        <h3 style={{ marginTop: 0, fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.5rem' }}>
+          Explorer
         </h3>
         <input 
           type="text" 
           placeholder="Search files..." 
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', fontSize: '0.9rem' }}
+          style={{ width: '100%', padding: '10px 14px', marginBottom: '1.5rem', borderRadius: '10px', border: '1px solid #1e293b', background: '#020617', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {filteredFiles.map(f => (
@@ -100,32 +100,37 @@ const Docs = () => {
                 cursor: 'pointer', 
                 padding: '10px 12px', 
                 borderRadius: '8px',
-                background: selectedDoc === f ? '#e3f2fd' : 'transparent',
-                color: selectedDoc === f ? '#1e88e5' : '#444',
+                background: selectedDoc === f ? '#38bdf815' : 'transparent',
+                color: selectedDoc === f ? '#38bdf8' : '#94a3b8',
                 fontWeight: selectedDoc === f ? '600' : 'normal',
                 fontSize: '0.85rem',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                border: '1px solid transparent'
               }}
+              onMouseOver={e => { if (selectedDoc !== f) e.currentTarget.style.background = '#1e293b'; }}
+              onMouseOut={e => { if (selectedDoc !== f) e.currentTarget.style.background = 'transparent'; }}
             >
-              📄 {f}
+              {f}
             </div>
           ))}
-          {filteredFiles.length === 0 && <p style={{ color: '#999', fontSize: '0.8rem', textAlign: 'center' }}>No matches found.</p>}
+          {filteredFiles.length === 0 && <p style={{ color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>No matches found.</p>}
         </div>
       </aside>
 
       {/* Main Content Viewer */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '0 10px', background: '#fff' }}>
+      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem 3rem', background: '#020617' }}>
         {selectedDoc ? (
           <div style={{ maxWidth: '850px', margin: '0 auto' }}>
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '50px', color: '#1e88e5' }}>Retrieving Document...</div>
+              <div style={{ textAlign: 'center', padding: '50px', color: '#38bdf8' }}>Retrieving Document...</div>
             ) : (
-              <div ref={contentRef} className="markdown-viewer" style={{ paddingBottom: '100px', position: 'relative' }}>
+              <div ref={contentRef} className="markdown-viewer fade-in" style={{ paddingBottom: '100px', position: 'relative', color: '#e2e8f0', lineHeight: '1.8' }}>
                 <button 
                   onClick={handleEdit}
-                  style={{ position: 'absolute', right: 0, top: '-45px', padding: '6px 12px', borderRadius: '6px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', color: '#666' }}
+                  style={{ position: 'absolute', right: 0, top: '-45px', padding: '6px 14px', borderRadius: '8px', border: '1px solid #334155', background: '#1e293b', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600', color: '#f8fafc', transition: 'all 0.2s' }}
                   title="Open in local editor"
+                  onMouseOver={e => e.currentTarget.style.borderColor = '#38bdf8'}
+                  onMouseOut={e => e.currentTarget.style.borderColor = '#334155'}
                 >
                   ✎ Edit Page
                 </button>
@@ -135,30 +140,33 @@ const Docs = () => {
                     h1: ({children}) => {
                       const id = slugify(String(children));
                       return (
-                        <h1 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
+                        <h1 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f8fafc' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
                           {children}
-                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '1rem', opacity: 0, color: '#1e88e5', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
+                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '1rem', opacity: 0, color: '#38bdf8', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
                         </h1>
                       );
                     },
                     h2: ({children}) => {
                       const id = slugify(String(children));
                       return (
-                        <h2 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
+                        <h2 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#f1f5f9', marginTop: '2rem' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
                           {children}
-                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0, color: '#1e88e5', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
+                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0, color: '#38bdf8', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
                         </h2>
                       );
                     },
                     h3: ({children}) => {
                       const id = slugify(String(children));
                       return (
-                        <h3 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
+                        <h3 id={id} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#cbd5e1' }} onMouseEnter={e => e.currentTarget.lastChild.style.opacity = 0.5} onMouseLeave={e => e.currentTarget.lastChild.style.opacity = 0}>
                           {children}
-                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '0.8rem', opacity: 0, color: '#1e88e5', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
+                          <span onClick={() => copyHeadingLink(id)} style={{ cursor: 'pointer', fontSize: '0.8rem', opacity: 0, color: '#38bdf8', transition: 'opacity 0.2s' }} title="Copy anchor link">🔗</span>
                         </h3>
                       );
                     },
+                    p: ({children}) => <p style={{ color: '#cbd5e1', marginBottom: '1.5rem', fontSize: '1rem' }}>{children}</p>,
+                    li: ({children}) => <li style={{ color: '#cbd5e1', marginBottom: '0.6rem' }}>{children}</li>,
+                    strong: ({children}) => <strong style={{ color: '#f8fafc', fontWeight: '700' }}>{children}</strong>,
                     code({node, inline, className, children, ...props}) {
                       const match = /language-(\w+)/.exec(className || '');
                       if (!inline && match && match[1] === 'mermaid') {
@@ -180,16 +188,16 @@ const Docs = () => {
             )}
           </div>
         ) : (
-          <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#b2bec3', gap: '15px' }}>
-            <span style={{ fontSize: '3rem' }}>📑</span>
-            <p>Select a document from the explorer to start reading.</p>
+          <div style={{ display: 'flex', height: '100%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', gap: '15px' }}>
+            <span style={{ fontSize: '4rem', opacity: 0.2 }}>📂</span>
+            <p style={{ fontSize: '1.1rem', fontWeight: '500', color: '#64748b' }}>Select a document from the explorer to start reading.</p>
           </div>
         )}
       </main>
 
       {/* Table of Contents Sidebar */}
-      <aside style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #eee', paddingLeft: '20px', overflowY: 'auto' }}>
-        <h4 style={{ marginTop: 0, color: '#636e72', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px' }}>On this page</h4>
+      <aside style={{ width: '260px', flexShrink: 0, borderLeft: '1px solid #1e293b', padding: '2rem 1.5rem', background: '#0f172a', overflowY: 'auto' }}>
+        <h4 style={{ marginTop: 0, color: '#64748b', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px' }}>On this page</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
           {toc.length === 0 && <p style={{ fontSize: '0.8rem', color: '#999' }}>No sections found.</p>}
           {toc.map((item, i) => (
@@ -198,10 +206,10 @@ const Docs = () => {
               href={`#${item.id}`}
               style={{ 
                 textDecoration: 'none', 
-                color: '#1e88e5', 
+                color: '#94a3b8', 
                 fontSize: '0.85rem',
                 paddingLeft: `${(item.level - 1) * 12}px`,
-                opacity: 0.8,
+                opacity: 0.7,
                 lineHeight: '1.4'
               }}
               onClick={(e) => {

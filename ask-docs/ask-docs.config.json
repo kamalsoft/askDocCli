@@ -5,10 +5,11 @@
     "activeProfile": "fast",
     "topK": 3,
     "openrouter": {
-      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "apiKey": "********",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "baseUrl": "https://openrouter.ai/api/v1"
     },
-    "confidenceThreshold": 1,
+    "confidenceThreshold": 0.5,
     "watchMode": true
   }
 }

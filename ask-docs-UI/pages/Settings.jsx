@@ -115,6 +115,19 @@ const Settings = () => {
     } catch (e) { console.error("SSE Error:", e); }
   };
 
+  const handleReset = async () => {
+    if (!confirm('Are you sure you want to reset all settings to factory defaults? This will erase your current configuration file.')) return;
+    try {
+      const res = await fetch('/api/config/reset', { method: 'POST' });
+      if (res.ok) {
+        fetchConfig();
+        setMessage('✅ Configuration reset to factory defaults.');
+      }
+    } catch (e) {
+      setMessage('❌ Failed to reset configuration.');
+    }
+  };
+
   const handleClearCache = async () => {
     if (!confirm('Are you sure you want to clear the ingestion cache? This will force a full re-embedding of all documents on the next ingest.')) return;
     try {
@@ -200,13 +213,16 @@ const Settings = () => {
     }
   };
 
+  const cardStyle = { padding: '2.5rem', background: '#0f172a', border: '1px solid #1e293b', borderRadius: '24px', marginBottom: '2rem', transition: 'border-color 0.3s' };
+
   return (
-    <div className="settings-container" style={{ padding: '2rem', maxWidth: '800px' }}>
-      <h1>System Settings</h1>
-      {message && <div style={{ padding: '1rem', background: '#e3f2fd', marginBottom: '1rem', borderRadius: '4px' }}>{message}</div>}
-      
-      <section className="config-section" style={{ marginBottom: '2rem' }}>
-        <h2>Inference Configuration</h2>
+    <div className="settings-container fade-in" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', color: '#f8fafc', paddingBottom: '100px' }}>
+      <h1 style={{ fontWeight: '800', marginBottom: '2.5rem' }}>System Configuration</h1>
+      {message && <div style={{ padding: '1rem 1.5rem', background: '#0ea5e920', border: '1px solid #0ea5e940', color: '#38bdf8', marginBottom: '2.5rem', borderRadius: '12px', fontSize: '0.9rem' }}>{message}</div>}
+
+      {/* GROUP 1: AI Reasoning & Logic */}
+      <section style={cardStyle} onMouseEnter={e => e.currentTarget.style.borderColor = '#38bdf840'} onMouseLeave={e => e.currentTarget.style.borderColor = '#1e293b'}>
+        <h2 style={{ marginTop: 0, marginBottom: '2rem', color: '#38bdf8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>🧠 AI Reasoning & Logic</h2>
         {config && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -264,26 +280,13 @@ const Settings = () => {
               />
               <label htmlFor="bm25">BM25-Only Mode (Disable semantic embeddings for speed)</label>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input 
-                type="checkbox" 
-                id="watchMode"
-                checked={config.watchMode} 
-                onChange={(e) => updateConfig({ watchMode: e.target.checked })}
-              />
-              <label htmlFor="watchMode">
-                <strong>Auto-Sync (Watch Mode)</strong>: Automatically re-ingest when Markdown files are edited.
-              </label>
-            </div>
           </div>
         )}
       </section>
 
-      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
-
-      <section className="openrouter-section" style={{ marginBottom: '2rem' }}>
-        <h2>OpenRouter Configuration</h2>
-        <p style={{ color: '#666', marginBottom: '1rem' }}>Configure cloud-based models when using OpenRouter or Auto modes.</p>
+      {/* GROUP 2: Cloud Gateway */}
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0, marginBottom: '2rem', color: '#818cf8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>☁️ Cloud Gateway (OpenRouter)</h2>
         {config?.openrouter && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -322,12 +325,11 @@ const Settings = () => {
         )}
       </section>
 
-      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
-
-      <section className="ingest-section" style={{ marginBottom: '2rem' }}>
-        <h2>Document Management</h2>
-        <p style={{ color: '#666', marginBottom: '1rem' }}>
-          Trigger a manual scan of your <code>docs/</code> folder to update the vector store with new or modified content.
+      {/* GROUP 3: Knowledge Base & Sync */}
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0, marginBottom: '2rem', color: '#22c55e', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>📂 Knowledge Base & Sync</h2>
+        <p style={{ color: '#94a3b8', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+          Manage your local document index and automated synchronization settings.
         </p>
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
@@ -393,20 +395,37 @@ const Settings = () => {
         )}
       </section>
 
-      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
-
-      <section className="benchmark-section" style={{ marginBottom: '2rem' }}>
-        <h2>Accuracy Benchmarks</h2>
-        <p style={{ color: '#666', marginBottom: '1rem' }}>
-          Run automated tests against <code>benchmarks.json</code> to verify RAG retrieval and answer quality.
+      {/* GROUP 4: System Validation */}
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0, marginBottom: '2rem', color: '#f59e0b', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>🛡️ System Validation</h2>
+        <p style={{ color: '#94a3b8', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+          Verify the integrity of local model weights and run ground-truth benchmarks.
         </p>
-        <button 
-          onClick={handleBenchmark} 
-          disabled={benchmarking}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
-        >
-          {benchmarking ? 'Running Tests...' : 'Run Benchmarks'}
-        </button>
+        
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+          <button 
+            onClick={handleVerify} 
+            disabled={loading}
+            style={{ padding: '0.6rem 1.2rem', cursor: 'pointer', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }}
+          >
+            {loading ? 'Verifying Pipeline...' : 'Run Model Integrity Check'}
+          </button>
+
+          <button 
+            onClick={handleBenchmark} 
+            disabled={benchmarking}
+            style={{ padding: '0.6rem 1.2rem', cursor: 'pointer', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }}
+          >
+            {benchmarking ? 'Running Benchmarks...' : 'Run Accuracy Benchmarks'}
+          </button>
+
+          <button 
+            onClick={handleReset} 
+            style={{ padding: '0.6rem 1.2rem', cursor: 'pointer', background: 'transparent', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '8px', fontSize: '0.85rem', marginLeft: 'auto' }}
+          >
+            Reset to Factory Defaults
+          </button>
+        </div>
 
         {benchmarkProgress && (
           <div style={{ marginTop: '1.5rem', maxHeight: '400px', overflowY: 'auto' }}>
@@ -462,20 +481,6 @@ const Settings = () => {
             ))}
           </div>
         )}
-      </section>
-
-      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
-
-      <section className="verify-section">
-        <h2>Model Integrity & Connectivity</h2>
-        <p>Check if local ONNX weights are valid and OpenRouter is reachable.</p>
-        <button 
-          onClick={handleVerify} 
-          disabled={loading}
-          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
-        >
-          {loading ? 'Verifying Pipeline...' : 'Run Diagnostics'}
-        </button>
 
         {verifyResults && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px' }}>

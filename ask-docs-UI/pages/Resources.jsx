@@ -55,17 +55,17 @@ const Resources = () => {
   );
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1200px', margin: '2rem auto', color: '#f8fafc', padding: '0 2rem' }}>
       {!selectedGuide ? (
         <>
-          <h1 style={{ color: '#2d3436' }}>📚 Resource Center</h1>
-          <p style={{ color: '#636e72', marginBottom: '2rem' }}>Learn more about the technical architecture and business value of Ask-Docs.</p>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: '800', marginBottom: '0.5rem' }}>Resource Center</h1>
+          <p style={{ color: '#94a3b8', marginBottom: '2.5rem' }}>Deep dives into the technical architecture and business value of DocIntel.</p>
           <input 
             type="text"
             placeholder="Search for a specific guide..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', padding: '15px', borderRadius: '10px', border: '1px solid #dfe6e9', marginBottom: '2rem', fontSize: '1rem', outline: 'none' }}
+            style={{ width: '100%', padding: '14px 18px', borderRadius: '12px', border: '1px solid #1e293b', background: '#020617', color: '#f8fafc', marginBottom: '2.5rem', fontSize: '1rem', outline: 'none' }}
           />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
             {filteredGuides.map(g => (
@@ -73,14 +73,14 @@ const Resources = () => {
                 key={g.id} 
                 onClick={() => loadGuide(g.id)}
                 style={{ 
-                  padding: '25px', border: '1px solid #dfe6e9', borderRadius: '12px', cursor: 'pointer',
-                  transition: 'all 0.2s', background: '#fff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+                  padding: '25px', border: '1px solid #1e293b', borderRadius: '16px', cursor: 'pointer',
+                  transition: 'all 0.2s', background: '#0f172a', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
                 }}
-                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = '#1e88e5'; }}
-                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#dfe6e9'; }}
+                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = '#38bdf8'; }}
+                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#1e293b'; }}
               >
-                <h3 style={{ margin: '0 0 12px 0', color: '#1e88e5' }}>{g.title}</h3>
-                <p style={{ fontSize: '0.9rem', color: '#636e72', margin: 0, lineHeight: '1.5' }}>{g.desc}</p>
+                <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '1.1rem' }}>{g.title}</h3>
+                <p style={{ fontSize: '0.9rem', color: '#94a3b8', margin: 0, lineHeight: '1.6' }}>{g.desc}</p>
               </div>
             ))}
           </div>
@@ -89,21 +89,24 @@ const Resources = () => {
         <div>
           <button 
             onClick={() => setSelectedGuide(null)} 
-            style={{ marginBottom: '1.5rem', background: 'none', border: 'none', color: '#1e88e5', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+            style={{ marginBottom: '1.5rem', background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
-            <span>←</span> Back to Resources
+            <span>←</span> Back
           </button>
           <div 
             ref={contentRef}
             className="markdown-viewer"
             style={{ 
-              background: '#fff', padding: '40px', borderRadius: '12px', border: '1px solid #eee', 
-              color: '#2d3436', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' 
+              background: '#0f172a', padding: '3rem', borderRadius: '20px', border: '1px solid #1e293b', 
+              color: '#e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', lineHeight: '1.8'
             }}
           >
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
+                p: ({children}) => <p style={{ color: '#cbd5e1', marginBottom: '1.5rem', fontSize: '1rem' }}>{children}</p>,
+                li: ({children}) => <li style={{ color: '#cbd5e1', marginBottom: '0.6rem' }}>{children}</li>,
+                strong: ({children}) => <strong style={{ color: '#f8fafc', fontWeight: '700' }}>{children}</strong>,
                 code({node, inline, className, children, ...props}) {
                   const match = /language-(\w+)/.exec(className || '');
                   if (!inline && match && match[1] === 'mermaid') {
@@ -129,9 +132,9 @@ const Resources = () => {
               {content}
             </ReactMarkdown>
           </div>
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '20px', color: '#1e88e5' }}>Retrieving Guide...</div>
-          )}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: '#38bdf8' }}>Retrieving Guide...</div>
+          ) : null}
         </div>
       )}
     </div>

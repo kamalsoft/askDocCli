@@ -13,6 +13,7 @@ const Ask = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
+  const scrollContainerRef = useRef(null);
   const [history, setHistory] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('ask_history') || '[]');
@@ -22,7 +23,9 @@ const Ask = () => {
 
   // Auto-scroll to the latest output
   useEffect(() => {
-    answerEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (loading) {
+      answerEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [answer, thought, status]);
 
   // Persist history to localStorage
@@ -132,6 +135,10 @@ const Ask = () => {
     setStatus('');
   };
 
+  const scrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAsk = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const q = question.trim();
@@ -195,34 +202,35 @@ const Ask = () => {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '30px', maxWidth: '1200px', margin: '0 auto', paddingBottom: '50px' }}>
+    <div style={{ display: 'flex', gap: '0', maxWidth: '1600px', margin: '0 auto', height: 'calc(100vh - 120px)', color: '#f8fafc' }}>
       {/* History Sidebar */}
-      <aside style={{ width: '280px', flexShrink: 0, borderRight: '1px solid #eee', paddingRight: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333' }}>History</h3>
+      <aside style={{ width: '320px', flexShrink: 0, borderRight: '1px solid #1e293b', padding: '2rem 1.5rem', background: '#0f172a', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <h3 style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>History</h3>
           <button 
             onClick={startNewChat}
             style={{ 
-              padding: '5px 10px', 
-              cursor: retryTimer > 0 ? 'not-allowed' : 'pointer', 
-              background: 'white', 
-              border: '1px solid #1e88e5', 
-              color: '#1e88e5', 
-              borderRadius: '4px',
-              fontSize: '0.8rem'
+              padding: '4px 12px', 
+              cursor: 'pointer', 
+              background: 'transparent', 
+              border: '1px solid #334155', 
+              color: '#94a3b8', 
+              borderRadius: '6px',
+              fontSize: '0.7rem',
+              fontWeight: '600'
             }}
           >
             New Chat
           </button>
         </div>
         <input 
-          style={{ width: '100%', padding: '8px', marginBottom: '1rem', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.85rem', boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: '12px', marginBottom: '1.5rem', borderRadius: '10px', border: '1px solid #1e293b', background: '#020617', color: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
           placeholder="Search history..."
           value={historySearch}
           onChange={e => setHistorySearch(e.target.value)}
         />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {history.length === 0 && <p style={{ color: '#999', fontSize: '0.9rem' }}>No recent questions.</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {history.length === 0 && <p style={{ color: '#475569', fontSize: '0.85rem' }}>Empty workspace</p>}
           {history
             .filter(item => item.question.toLowerCase().includes(historySearch.toLowerCase()))
             .map(item => (
@@ -230,21 +238,21 @@ const Ask = () => {
               key={item.id} 
               onClick={() => loadFromHistory(item)}
               style={{ 
-                padding: '10px', 
-                borderRadius: '6px', 
-                border: '1px solid #eee', 
+                padding: '12px', 
+                borderRadius: '10px', 
+                border: '1px solid #1e293b', 
                 cursor: 'pointer',
-                background: question === item.question ? '#e3f2fd' : 'white',
+                background: question === item.question ? '#0ea5e920' : '#1e293b40',
                 fontSize: '0.85rem',
                 transition: 'all 0.2s',
                 position: 'relative',
                 paddingRight: '30px'
               }}
             >
-              <div style={{ fontWeight: '600', color: '#444', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontWeight: '600', color: question === item.question ? '#38bdf8' : '#cbd5e1', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.question}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#888' }}>{item.timestamp}</div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{item.timestamp}</div>
               <button
                 onClick={(e) => deleteHistoryItem(e, item.id)}
                 style={{
@@ -276,30 +284,59 @@ const Ask = () => {
       </aside>
 
       {/* Main Chat Area */}
-      <div style={{ flex: 1 }}>
-        <form onSubmit={handleAsk} style={{ display: 'flex', gap: '10px', marginBottom: '1rem' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#020617' }}>
+        <form onSubmit={handleAsk} style={{ display: 'flex', gap: '12px', padding: '2rem 2.5rem', borderBottom: '1px solid #1e293b', background: '#0f172a' }}>
           <input 
-            style={{ flex: 1, padding: '12px', borderRadius: '4px', border: '1px solid #ddd' }} 
+            style={{ flex: 1, padding: '14px 18px', borderRadius: '12px', border: '1px solid #334155', background: '#020617', color: '#f8fafc', fontSize: '1rem', outline: 'none' }} 
             value={question} 
             onChange={e => setQuestion(e.target.value)} 
-            placeholder="Ask your documentation anything..." 
+            placeholder="Enter a technical query..." 
           />
           <button 
             type="submit" 
             disabled={loading}
             style={{ 
-              padding: '0 20px', 
+              padding: '0 24px', 
               cursor: 'pointer', 
-              background: '#1e88e5', 
-              color: 'white', 
+              background: '#38bdf8', 
               border: 'none', 
-              borderRadius: '4px',
-              fontWeight: 'bold'
+              borderRadius: '12px',
+              fontWeight: '700',
+              color: '#0f172a'
             }}
           >
             {loading ? 'Thinking...' : 'Ask'}
           </button>
         </form>
+
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '2rem 2.5rem', position: 'relative' }}>
+          
+          {answer && (
+            <button 
+              onClick={scrollToTop}
+              style={{
+                position: 'fixed',
+                bottom: '80px',
+                right: '40px',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.2rem',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.2)'
+              }}
+              title="Scroll to Top"
+            >
+              ↑
+            </button>
+          )}
 
         {error && (
           <div style={{ 
@@ -339,23 +376,25 @@ const Ask = () => {
         )}
 
         {thought && (
-          <div style={{ background: '#f8f9fa', padding: '15px', marginTop: '10px', borderLeft: '4px solid #dee2e6', borderRadius: '4px' }}>
-            <small style={{ display: 'block', fontWeight: 'bold', color: '#6c757d', marginBottom: '5px' }}>THOUGHT PROCESS</small>
-            <div style={{ color: '#495057', fontSize: '0.95rem' }}>{thought}</div>
+          <div style={{ background: '#1e293b40', padding: '20px', marginTop: '10px', borderLeft: '2px solid #38bdf8', borderRadius: '4px', fontFamily: 'JetBrains Mono, monospace' }}>
+            <small style={{ display: 'block', fontWeight: '700', color: '#38bdf8', marginBottom: '8px', fontSize: '0.7rem', textTransform: 'uppercase' }}>Thought Logs</small>
+            <div style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: '1.5' }}>{thought}</div>
           </div>
         )}
 
         {answer && (
-          <div style={{ 
+          <div className="answer-panel" style={{ 
             position: 'relative',
-            border: '1px solid #e3f2fd', 
-            padding: '20px', 
-            marginTop: '15px', 
+            border: '1px solid #1e293b', 
+            padding: '30px', 
+            marginTop: '20px', 
             whiteSpace: 'pre-wrap', 
-            borderRadius: '8px', 
-            background: 'white',
-            lineHeight: '1.6',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            borderRadius: '16px', 
+            background: '#0f172a',
+            lineHeight: '1.7',
+            fontSize: '1.05rem',
+            color: '#e2e8f0',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
           }}>
             <button 
               onClick={copyToClipboard}
@@ -364,12 +403,12 @@ const Ask = () => {
                 top: '10px',
                 right: '10px',
                 padding: '4px 8px',
-                fontSize: '0.7rem',
+                fontSize: '0.65rem',
                 cursor: 'pointer',
-                background: copied ? '#4caf50' : '#f5f5f5',
-                color: copied ? 'white' : '#666',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
+                background: copied ? '#22c55e' : '#1e293b',
+                color: copied ? '#fff' : '#94a3b8',
+                border: '1px solid #334155',
+                borderRadius: '6px',
                 transition: 'all 0.2s'
               }}
             >
@@ -380,9 +419,9 @@ const Ask = () => {
         )}
 
         {citations.length > 0 && (
-          <div style={{ marginTop: '20px', padding: '15px', background: '#fffde7', border: '1px solid #fff59d', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#f57f17' }}>SOURCES</h4>
-            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: '#5d4037' }}>
+          <div style={{ marginTop: '24px', padding: '1.5rem', background: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}>
+            <h4 style={{ margin: '0 0 12px 0', fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Citations</h4>
+            <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#94a3b8' }}>
               {citations.map((c, i) => <li key={i} style={{ marginBottom: '4px' }}>{c}</li>)}
             </ul>
           </div>
@@ -390,11 +429,12 @@ const Ask = () => {
         <div ref={answerEndRef} />
 
         {stats && (
-          <div style={{ marginTop: '20px', fontSize: '0.8rem', color: '#9e9e9e', textAlign: 'right', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-            Speed: <strong>{stats.tps}</strong> tokens/sec | Total: <strong>{stats.tokenCount}</strong> tokens
-            {stats.hasMoreContext && <div style={{ color: '#1e88e5', marginTop: '5px' }}>💡 More relevant data was found. Increase topK in settings for a more thorough answer.</div>}
+          <div style={{ marginTop: '2rem', fontSize: '0.7rem', color: '#475569', textAlign: 'right', borderTop: '1px solid #1e293b', paddingTop: '1rem' }}>
+            {stats.tps} tokens/sec • {stats.tokenCount} tokens
+            {stats.hasMoreContext && <div style={{ color: '#38bdf8', marginTop: '0.5rem' }}>ℹ Further documentation relevant to this query is available. Adjust Top K to retrieve more.</div>}
           </div>
         )}
+        </div>
       </div>
     </div>
   );
