@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: ask-docs/package-lock.json
       - name: Install dependencies
         run: cd ask-docs && npm install
-      + name: Validation
+      - name: Validation
         run: cd ask-docs && npm test
 
   ui-check:
