@@ -1,0 +1,12 @@
+# Exclude large model files
+**/*.onnx
+**/*.bin
+**/*.pt
+**/*.weights
+**/models/
+
+# Exclude local dependencies and build artifacts
+node_modules/
+.env
+.DS_Store
+ask-docs/models

@@ -72,3 +72,4 @@ coverage
 /web/*.keystore
 .package-lock.json
 /web/package-lock.json
+.vercel

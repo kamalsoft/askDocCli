@@ -162,7 +162,7 @@ const Ask = () => {
     setError('');
 
     // If VITE_API_BASE is empty, requests hit the Vercel domain and trigger the proxy in vercel.json
-    const apiBase = import.meta.env.VITE_API_BASE || '';
+    const apiBase = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
     const endpoint = apiBase ? `${apiBase}/ask` : '/ask';
 
     try {

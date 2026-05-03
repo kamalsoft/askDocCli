@@ -15,7 +15,7 @@
       "destination": "https://YOUR_ENGINE_API_URL/ask"
     },
     {
-      "source": "/(.*)",
+      "source": "/web/(.*)",
       "destination": "/index.html"
     }
   ]
