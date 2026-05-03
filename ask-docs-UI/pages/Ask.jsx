@@ -161,8 +161,9 @@ const Ask = () => {
     setRetryTimer(0);
     setError('');
 
+    const apiBase = import.meta.env.VITE_API_BASE || '';
     try {
-      const response = await fetch('/ask', {
+      const response = await fetch(`${apiBase}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
         body: JSON.stringify({ question })
