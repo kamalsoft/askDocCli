@@ -14,6 +14,8 @@ const Settings = () => {
   const [benchmarkProgress, setBenchmarkProgress] = useState(null);
   const [expandedResult, setExpandedResult] = useState(null);
   const [message, setMessage] = useState('');
+  const [connLoading, setConnLoading] = useState(false);
+  const [connResult, setConnResult] = useState(null);
 
   useEffect(() => {
     fetchConfig();
@@ -40,6 +42,21 @@ const Settings = () => {
       setMessage('Verification process failed to start.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckConnectivity = async () => {
+    setConnLoading(true);
+    setConnResult(null);
+    try {
+      const res = await fetch('/api/models/verify', { method: 'POST' });
+      const data = await res.json();
+      // Extract just the remote check from the full verification results
+      setConnResult(data.remote || { ok: false, message: 'Check failed' });
+    } catch (e) {
+      setConnResult({ ok: false, message: 'Failed to reach engine' });
+    } finally {
+      setConnLoading(false);
     }
   };
 
@@ -205,14 +222,37 @@ const Settings = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Top K (Context chunks retrieved)</label>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                Source Context Depth (Top K: {config.topK})
+                <small style={{ display: 'block', color: '#666', fontWeight: 'normal', marginTop: '0.2rem' }}>
+                  How many document snippets the AI "reads" to answer. Higher values provide more detail but can confuse smaller models.
+                </small>
+              </label>
               <input 
-                type="number" 
+                type="range" 
                 min="1" 
-                max="20"
+                max="15"
+                step="1"
                 value={config.topK} 
-                onChange={(e) => updateConfig({ topK: parseInt(e.target.value) || 1 })}
-                style={{ padding: '0.5rem', width: '100px', borderRadius: '4px', border: '1px solid #ccc' }}
+                onChange={(e) => updateConfig({ topK: parseInt(e.target.value) })}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                Answer Reliability Guard (Threshold: {config.confidenceThreshold})
+                <small style={{ display: 'block', color: '#666', fontWeight: 'normal', marginTop: '0.2rem' }}>
+                  Controls when to ignore documents and use general AI knowledge. 0.1 is loose; 0.5 is strict (maximum recommended).
+                </small>
+              </label>
+              <input 
+                type="range" 
+                min="0.01" 
+                max="1.0"
+                step="0.01"
+                value={config.confidenceThreshold} 
+                onChange={(e) => updateConfig({ confidenceThreshold: parseFloat(e.target.value) })}
+                style={{ width: '100%', cursor: 'pointer' }}
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -223,6 +263,49 @@ const Settings = () => {
                 onChange={(e) => updateConfig({ bm25Only: e.target.checked })}
               />
               <label htmlFor="bm25">BM25-Only Mode (Disable semantic embeddings for speed)</label>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
+
+      <section className="openrouter-section" style={{ marginBottom: '2rem' }}>
+        <h2>OpenRouter Configuration</h2>
+        <p style={{ color: '#666', marginBottom: '1rem' }}>Configure cloud-based models when using OpenRouter or Auto modes.</p>
+        {config?.openrouter && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>AI Model ID</label>
+              <input 
+                type="text"
+                placeholder="e.g. google/gemini-pro"
+                value={config.openrouter.model}
+                onChange={(e) => updateConfig({ openrouter: { ...config.openrouter, model: e.target.value } })}
+                style={{ padding: '0.5rem', width: '100%', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+            </div>
+            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <button 
+                onClick={handleCheckConnectivity}
+                disabled={connLoading}
+                style={{ 
+                  padding: '0.4rem 0.8rem', 
+                  fontSize: '0.8rem', 
+                  cursor: 'pointer',
+                  background: 'white',
+                  border: '1px solid #1e88e5',
+                  color: '#1e88e5',
+                  borderRadius: '4px'
+                }}
+              >
+                {connLoading ? 'Testing...' : 'Check Connectivity'}
+              </button>
+              {connResult && (
+                <span style={{ fontSize: '0.85rem', color: connResult.ok ? '#2e7d32' : '#d32f2f' }}>
+                  {connResult.ok ? '✅ Connected' : `❌ ${connResult.message}`}
+                </span>
+              )}
             </div>
           </div>
         )}

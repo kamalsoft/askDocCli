@@ -263,27 +263,39 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/ask" && req.method === "POST") {
-    const { question } = await getRequestBody(req);
-    const acceptHeader = req.headers.accept || "";
-    const isStreaming = acceptHeader.includes("text/event-stream");
+    let isStreaming = false;
+    try {
+      const { question } = await getRequestBody(req);
+      const acceptHeader = req.headers.accept || "";
+      isStreaming = acceptHeader.includes("text/event-stream");
 
-    let onToken = null;
-    if (isStreaming) {
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
-      });
-      onToken = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    }
+      let onToken = null;
+      if (isStreaming) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "Access-Control-Allow-Origin": "*"
+        });
+        onToken = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      }
 
-    const result = await askDocs(question, onToken);
-    
-    if (isStreaming) {
-      res.write(`data: ${JSON.stringify({ done: true, ...result })}\n\n`);
-      return res.end();
-    } else {
-      return sendJSON(res, 200, result);
+      const result = await askDocs(question, onToken);
+      
+      if (isStreaming) {
+        res.write(`data: ${JSON.stringify({ done: true, ...result })}\n\n`);
+        return res.end();
+      } else {
+        return sendJSON(res, 200, result);
+      }
+    } catch (err) {
+      log(`❌ Ask process failed: ${err.message}`);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+        return res.end();
+      } else {
+        return sendJSON(res, 500, { error: err.message });
+      }
     }
   }
 

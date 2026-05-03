@@ -47,7 +47,7 @@ const DEFAULT_CONFIG = {
     rerankTopK: 5,          // Reduced to prevent instruction-drift in small models
     enableReranker: true,   // High-fidelity chunk selection
     enableRethink: true,    // Two-pass reasoning
-    inferenceMode: "local", // Default to local for stability; override in ask-docs.config.json
+    inferenceMode: "auto", // Default to local for stability; override in ask-docs.config.json
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY || "",
       model: "nvidia/nemotron-3-super-120b-a12b:free",
