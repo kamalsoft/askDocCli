@@ -60,7 +60,7 @@ Follow these prompts:
 2.  **Which scope?** [Your Account]
 3.  **Link to existing project?** `N`
 4.  **What's your project's name?** `ask-docs-app`
-5.  **In which directory is your code located?** `ask-docs-UI`
+5.  **In which directory is your code located?** `./`
 6.  **Vercel detected a framework?** Confirm if it's correct (e.g., Vite or React).
 7.  **Want to override settings?** `N` (usually defaults are fine).
 

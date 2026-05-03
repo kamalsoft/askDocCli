@@ -1,0 +1,13 @@
+{
+  "name": "ask-docs-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "ask-docs-UI"
+  ],
+  "description": "Root configuration for Ask-Docs monorepo",
+  "engines": {
+    "node": "20.x"
+  }
+}

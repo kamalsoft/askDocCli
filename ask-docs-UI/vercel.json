@@ -8,14 +8,14 @@
     },
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR_ENGINE_API_URL/api/:path*"
+      "destination": "https://ask-doc-cli.vercel.app/api/:path*"
     },
     {
       "source": "/ask",
-      "destination": "https://YOUR_ENGINE_API_URL/ask"
+      "destination": "https://ask-doc-cli.vercel.app/ask"
     },
     {
-      "source": "/web/(.*)",
+      "source": "/ask-docs-UI/(.*)",
       "destination": "/index.html"
     }
   ]
