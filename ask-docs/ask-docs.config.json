@@ -1,15 +1,16 @@
 {
   "appSettings": {
-    "inferenceMode": "local",
+    "inferenceMode": "auto",
     "activeModel": "llama-3.2",
     "activeProfile": "fast",
-    "topK": 3,
+    "topK": 1,
     "openrouter": {
       "apiKey": "********",
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "baseUrl": "https://openrouter.ai/api/v1"
     },
-    "confidenceThreshold": 0.5,
-    "watchMode": true
+    "confidenceThreshold": 0.13,
+    "watchMode": false,
+    "bm25Only": false
   }
 }

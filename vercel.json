@@ -4,20 +4,16 @@
   "cleanUrls": true,
   "functions": {
     "api/**/*.js": {
-      "includeFiles": "ask-docs-UI/documentation/**"
+      "includeFiles": "{ask-docs/**,docs/**,ask-docs.config.json,vector-store/**}"
     }
   },
   "rewrites": [
-    {
-      "source": "/api/documentation/get",
-      "destination": "/api/documentation/get"
-    },
     {
       "source": "/ask",
       "destination": "/api/ask"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/ask-docs-UI/dist/$1"
     }
   ],

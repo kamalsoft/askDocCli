@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@vercel/edge-config";
 
 // Simple .env loader to populate process.env for local execution
 try {
@@ -123,6 +124,45 @@ export function loadConfig() {
   const activeProfileKey = userConfig.appSettings?.activeProfile || DEFAULT_CONFIG.appSettings.activeProfile;
   const profileSettings = DEFAULT_CONFIG.profiles[activeProfileKey] || {};
 
+  return finalizeConfig(DEFAULT_CONFIG, userConfig, profileSettings);
+}
+
+/**
+ * Fetches runtime overrides from Vercel Edge Config
+ */
+export async function getRemoteConfig() {
+  const baseConfig = loadConfig();
+  if (!process.env.EDGE_CONFIG) return baseConfig;
+
+  try {
+    const client = createClient(process.env.EDGE_CONFIG);
+    const remoteSettings = await client.get("appSettings");
+    if (remoteSettings) {
+      return {
+        ...baseConfig,
+        appSettings: { ...baseConfig.appSettings, ...remoteSettings }
+      };
+    }
+  } catch (e) {
+    console.error("Edge Config fetch failed:", e);
+  }
+  return baseConfig;
+}
+
+function finalizeConfig(DEFAULT_CONFIG, userConfig, profileSettings) {
+
+  // Map environment variables to config keys
+  const envOverrides = {
+    docsPath: process.env.ASK_DOCS_PATH,
+    modelsPath: process.env.ASK_DOCS_MODELS_PATH,
+    activeModel: process.env.ASK_DOCS_MODEL,
+    inferenceMode: process.env.ASK_DOCS_MODE,
+    openrouter: {
+      apiKey: process.env.OPENROUTER_API_KEY,
+      model: process.env.OPENROUTER_MODEL
+    }
+  };
+
   const finalConfig = { 
     ...DEFAULT_CONFIG, 
     ...userConfig,
@@ -130,9 +170,12 @@ export function loadConfig() {
       ...DEFAULT_CONFIG.appSettings,
       ...profileSettings,
       ...(userConfig.appSettings || {}),
+      // Merge environment overrides last so they have highest priority
+      ...Object.fromEntries(Object.entries(envOverrides).filter(([_, v]) => v != null)),
       openrouter: {
         ...DEFAULT_CONFIG.appSettings.openrouter,
-        ...(userConfig.appSettings?.openrouter || {})
+        ...(userConfig.appSettings?.openrouter || {}),
+        ...Object.fromEntries(Object.entries(envOverrides.openrouter).filter(([_, v]) => v != null))
       }
     }
   };

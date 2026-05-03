@@ -1,7 +1,7 @@
 {
   "version": 1,
   "model": "llama-3.2",
-  "createdAt": "2026-05-03T22:26:12.296Z",
+  "createdAt": "2026-05-03T23:28:56.398Z",
   "bm25Stats": {
     "avgdl": 42.166666666666664,
     "idf": {

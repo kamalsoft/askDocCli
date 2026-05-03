@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { embed } from "./embed.js";
 import { synthesizeAnswer } from "./synthesizer.js";
-import { loadConfig } from "./config.js";
+import { getRemoteConfig } from "./config.js";
 
 let cachedStore = null;
 let cachedBM25Stats = null;
@@ -13,7 +13,7 @@ function tokenize(text) {
 }
 
 export async function askDocs(question, onToken = null) {
-  const config = loadConfig();
+  const config = await getRemoteConfig();
   const settings = config.appSettings;
   const storePath = path.resolve(settings.storePath);
 
