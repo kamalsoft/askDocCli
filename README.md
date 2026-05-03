@@ -91,6 +91,7 @@ ask-docs/
   server/
     webServer.js
   vector-store/
+  documentation/
 docs/
   overview.md
   architecture.md

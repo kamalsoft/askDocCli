@@ -10,9 +10,13 @@
     "start": "node uiServer.js"
   },
   "dependencies": {
+    "mermaid": "^11.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.1"
+    "react-router-dom": "^6.26.1",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "react-syntax-highlighter": "^15.6.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

@@ -264,6 +264,17 @@ const Settings = () => {
               />
               <label htmlFor="bm25">BM25-Only Mode (Disable semantic embeddings for speed)</label>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input 
+                type="checkbox" 
+                id="watchMode"
+                checked={config.watchMode} 
+                onChange={(e) => updateConfig({ watchMode: e.target.checked })}
+              />
+              <label htmlFor="watchMode">
+                <strong>Auto-Sync (Watch Mode)</strong>: Automatically re-ingest when Markdown files are edited.
+              </label>
+            </div>
           </div>
         )}
       </section>

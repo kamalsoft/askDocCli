@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Ask from './pages/Ask';
 import Docs from './pages/Docs';
 import Settings from './pages/Settings';
+import Resources from './pages/Resources';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
           <Link to="/" style={{ fontWeight: 'bold', textDecoration: 'none', color: '#1e88e5' }}>🧠 Ask AI</Link>
           <Link to="/docs" style={{ fontWeight: 'bold', textDecoration: 'none', color: '#1e88e5' }}>📂 Explorer</Link>
           <Link to="/settings" style={{ fontWeight: 'bold', textDecoration: 'none', color: '#1e88e5' }}>⚙️ Settings</Link>
+          <Link to="/resources" style={{ fontWeight: 'bold', textDecoration: 'none', color: '#1e88e5' }}>📚 Resources</Link>
         </nav>
         
         <main style={{ padding: '2rem' }}>
@@ -19,6 +21,7 @@ function App() {
             <Route path="/" element={<Ask />} />
             <Route path="/docs" element={<Docs />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/resources" element={<Resources />} />
           </Routes>
         </main>
       </div>

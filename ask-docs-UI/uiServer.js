@@ -3,6 +3,7 @@
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { exec } from "child_process";
 import { fileURLToPath } from "url";
 
 // Import Engine logic from the CLI folder
@@ -21,6 +22,41 @@ const config = loadConfig();
 const PORT = config.port || 5174;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let docsWatcher = null;
+
+/**
+ * Orchestrates the file system watcher for the docs folder.
+ */
+function updateWatcher(enabled) {
+  if (enabled && !docsWatcher) {
+    const docsPath = path.resolve(config.appSettings.docsPath);
+    log(`👀 Starting Watch Mode on: ${docsPath}`);
+    
+    let isIngesting = false;
+    docsWatcher = fs.watch(docsPath, { recursive: true }, async (eventType, filename) => {
+      if (filename && filename.endsWith(".md") && !isIngesting) {
+        isIngesting = true;
+        await new Promise(r => setTimeout(r, 500)); // Debounce
+        log(`♻️  Change detected in ${filename}. Re-ingesting...`);
+        try {
+          await ingestDocs({ force: false });
+          log(`✅ Auto-update complete.`);
+        } catch (err) {
+          log(`❌ Auto-update failed: ${err.message}`);
+        }
+        isIngesting = false;
+      }
+    });
+  } else if (!enabled && docsWatcher) {
+    log(`🛑 Stopping Watch Mode.`);
+    docsWatcher.close();
+    docsWatcher = null;
+  }
+}
+
+// Initialize watcher based on initial config
+updateWatcher(config.appSettings.watchMode);
 
 function log(msg) {
   console.log(`🖥️  [UI-Server] ${msg}`);
@@ -141,7 +177,42 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/config" && req.method === "GET") {
-    return sendJSON(res, 200, config.appSettings);
+    // REDACT SENSITIVE DATA: Create a deep copy and mask the API Key
+    const safeConfig = JSON.parse(JSON.stringify(config.appSettings));
+    if (safeConfig.openrouter && safeConfig.openrouter.apiKey) {
+      safeConfig.openrouter.apiKey = "********";
+    }
+    return sendJSON(res, 200, safeConfig);
+  }
+
+  // Edit document endpoint (Opens local editor)
+  if (pathname === "/api/docs/edit" && req.method === "POST") {
+    try {
+      const { name } = await getRequestBody(req);
+      if (!name) return sendJSON(res, 400, { error: "Missing filename" });
+      
+      const filePath = path.resolve(config.appSettings.docsPath, name);
+      // OS-specific command to open file in default editor (or specific one like VS Code if configured)
+      const command = process.platform === 'win32' ? 'start' : 'open';
+      exec(`${command} "${filePath}"`);
+      
+      return sendJSON(res, 200, { status: "success" });
+    } catch (e) {
+      return sendJSON(res, 500, { error: "Failed to open editor" });
+    }
+  }
+
+  if (pathname === "/api/documentation/get") {
+    const name = query.name;
+    if (!name) return sendJSON(res, 400, { error: "Missing ?name=" });
+    const filePath = path.resolve("documentation", name);
+    try {
+      const content = await fs.promises.readFile(filePath, "utf8");
+      res.writeHead(200, { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" });
+      return res.end(content);
+    } catch {
+      return sendJSON(res, 404, { error: "Guide not found" });
+    }
   }
 
   if (pathname === "/api/config" && req.method === "POST") {
@@ -160,7 +231,15 @@ const server = http.createServer(async (req, res) => {
       fs.writeFileSync(configPath, JSON.stringify(userConfig, null, 2));
       
       Object.assign(config.appSettings, updates);
-      return sendJSON(res, 200, { status: "success" });
+      if (updates.watchMode !== undefined) updateWatcher(updates.watchMode);
+
+      // Mask key in response after update
+      const safeSettings = JSON.parse(JSON.stringify(config.appSettings));
+      if (safeSettings.openrouter && safeSettings.openrouter.apiKey) {
+        safeSettings.openrouter.apiKey = "********";
+      }
+
+      return sendJSON(res, 200, { status: "success", settings: safeSettings });
     } catch (err) {
       return sendJSON(res, 500, { error: "Failed to update configuration" });
     }

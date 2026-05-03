@@ -6,6 +6,22 @@ import { embed } from "./embed.js";
 import { loadConfig } from "./config.js";
 import { loadCache, saveCache, shouldRebuildFile, updateFileEntry, updateCacheMeta } from "./cache.js";
 
+/**
+ * Recursively finds all files in a directory.
+ */
+async function walkDir(dir, exclude = []) {
+  let files = [];
+  const list = await fs.promises.readdir(dir, { withFileTypes: true });
+  for (const entry of list) {
+    if (exclude.includes(entry.name)) continue;
+    
+    const res = path.resolve(dir, entry.name);
+    if (entry.isDirectory()) files = files.concat(await walkDir(res));
+    else files.push(res);
+  }
+  return files;
+}
+
 function validateModels(config) {
   const settings = config.appSettings;
   const modelsPath = path.resolve(settings.modelsPath);
@@ -103,7 +119,7 @@ async function testOpenRouterConnectivity(config) {
   }
 }
 
-export async function ingestDocs({ force = false, debug = false, onProgress = null } = {}) {
+export async function ingestDocs({ force = false, debug = false, onProgress = null, exclude = [] } = {}) {
   const config = loadConfig();
 
   // Fail fast if models are missing or corrupt
@@ -120,8 +136,14 @@ export async function ingestDocs({ force = false, debug = false, onProgress = nu
   if (!fs.existsSync(docsDir)) {
     throw new Error(`Docs folder not found: ${docsDir}`);
   }
+  
+  // Merge provided exclusions with app defaults
+  const defaultExclude = config.appSettings.excludeFolders || ['.git', 'node_modules', 'archive'];
+  const finalExclude = [...new Set([...defaultExclude, ...exclude])];
 
-  const files = (await fs.promises.readdir(docsDir)).filter(f => f.endsWith(".md"));
+  const allFilePaths = await walkDir(docsDir, finalExclude);
+  const files = allFilePaths.filter(f => f.endsWith(".md")).map(f => path.relative(docsDir, f));
+
   if (files.length === 0) {
     throw new Error("No Markdown files found in docs folder.");
   }

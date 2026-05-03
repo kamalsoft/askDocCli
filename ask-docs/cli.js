@@ -7,6 +7,7 @@ import { performance } from "perf_hooks";
 import { ingestDocs } from "./ingest.js";
 import { clearCache } from "./cache.js";
 import { askDocs } from "./ask.js";
+import { loadConfig } from "./config.js";
 import { runTUI } from "./tui.js";
 import { openPanelUI } from "./panel.js";
 
@@ -25,23 +26,50 @@ program
   .description("Ingest documentation into the local vector store")
   .option("-f, --force", "Force rebuild of all embeddings")
   .option("-d, --debug", "Enable verbose debug logging")
+  .option("-w, --watch", "Watch for changes and re-ingest automatically")
+  .option("-e, --exclude <folders>", "Comma-separated list of folders to exclude")
   .action(async (opts) => {
     const force = !!opts.force;
     const debug = !!opts.debug;
+    const watch = !!opts.watch;
+    const exclude = opts.exclude ? opts.exclude.split(',') : [];
 
     const start = performance.now();
-    console.log(
-      chalk.cyan(
-        `\n🚀 Starting ingest (force=${force}, debug=${debug})`
-      )
-    );
+    const label = watch ? "Watch & Ingest" : "Ingest";
+    console.log(chalk.cyan(`\n🚀 Starting ${label} (force=${force}, debug=${debug})`));
 
     try {
-      await ingestDocs({ force, debug });
+      await ingestDocs({ force, debug, exclude });
       const end = performance.now();
       const seconds = ((end - start) / 1000).toFixed(2);
+      console.log(chalk.green(`⏱  Initial ingest completed in ${seconds}s\n`));
 
-      console.log(chalk.green(`⏱  Ingest completed in ${seconds}s\n`));
+      if (watch) {
+        const config = loadConfig();
+        const docsPath = path.resolve(config.appSettings.docsPath);
+        console.log(chalk.yellow(`👀 Monitoring docs folder for changes: ${docsPath}`));
+        
+        let isIngesting = false;
+        fs.watch(docsPath, { recursive: true }, async (eventType, filename) => {
+          if (filename && filename.endsWith(".md") && !isIngesting) {
+            isIngesting = true;
+            // Small debounce to allow file system write to finish
+            await new Promise(r => setTimeout(r, 500));
+            
+            console.log(chalk.cyan(`\n♻️  Change detected: ${filename}. Updating vector store...`));
+            try {
+              await ingestDocs({ force: false, debug });
+              console.log(chalk.green(`✅ Auto-update complete.`));
+            } catch (err) {
+              console.error(chalk.red(`❌ Auto-update failed:`), err.message);
+            }
+            isIngesting = false;
+          }
+        });
+
+        // Keep process alive
+        await new Promise(() => {});
+      }
     } catch (err) {
       console.error(chalk.red("\n❌ Ingest failed:"), err.message || err);
       process.exitCode = 1;

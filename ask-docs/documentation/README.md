@@ -6,6 +6,14 @@
 
 The application allows users to index a folder of Markdown documents and query them using natural language. It optimizes for speed and privacy by utilizing "Small Language Models" (SLMs) that are efficient enough to run on consumer-grade CPUs.
 
+## 📚 Deep Dive Guides
+
+Detailed information on specific areas of the platform:
+
+*   **[Technical Features](./technicalFeatures.md)**: Details on Hybrid Search, Agentic Loops, and Performance.
+*   **[Model Configuration](./modelConfiguration.md)**: Setup guides for ONNX and OpenRouter.
+*   **[Business Overview](./businessOverview.md)**: ROI, DPIA, and Industry use cases.
+
 ## 🏁 Getting Started
 
 Follow these steps to get the environment ready for execution.
