@@ -7,6 +7,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/ask",
+      "destination": "/api/ask.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
