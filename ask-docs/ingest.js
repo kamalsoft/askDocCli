@@ -103,7 +103,7 @@ async function testOpenRouterConnectivity(config) {
   }
 }
 
-export async function ingestDocs({ force = false, debug = false } = {}) {
+export async function ingestDocs({ force = false, debug = false, onProgress = null } = {}) {
   const config = loadConfig();
 
   // Fail fast if models are missing or corrupt
@@ -126,6 +126,8 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
     throw new Error("No Markdown files found in docs folder.");
   }
 
+  if (onProgress) onProgress({ type: 'start', total: files.length });
+
   // Load existing store to preserve cached embeddings
   let existingChunks = [];
   try {
@@ -147,13 +149,15 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
       const text = await fs.promises.readFile(fullPath, "utf8");
 
       if (!force && !shouldRebuildFile(file, text, cache)) {
-        if (debug) console.log(`i  Skipping ${file} (cache hit)`);
+        if (onProgress) onProgress({ type: 'skip', file });
+        else if (debug) console.log(`i  Skipping ${file} (cache hit)`);
         // Recover existing chunks for this file
         const saved = existingChunks.filter(c => c.file === file);
         newChunks.push(...saved);
         continue;
       }
 
+      if (onProgress) onProgress({ type: 'process', file });
       const sections = splitIntoChunks(text, file, settings.chunkChars);
 
       for (const sec of sections) {
@@ -166,10 +170,11 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
       }
 
       updateFileEntry(file, text, cache);
-      console.log(`✔ Processed ${file} (${sections.length} chunks)`);
+      if (!onProgress) console.log(`✔ Processed ${file} (${sections.length} chunks)`);
 
     } catch (err) {
-      console.error(`❌ Error processing ${file}:`, err);
+      if (onProgress) onProgress({ type: 'error', file, message: err.message });
+      else console.error(`❌ Error processing ${file}:`, err);
     }
   }
 
@@ -190,7 +195,10 @@ export async function ingestDocs({ force = false, debug = false } = {}) {
   };
 
   await fs.promises.writeFile(storePath, JSON.stringify(storeData, null, 2));
-  console.log(`\n✅ Ingest complete. ${newChunks.length} chunks saved to disk.`);
+  
+  const msg = `Ingest complete. ${newChunks.length} chunks saved to disk.`;
+  if (onProgress) onProgress({ type: 'done', message: msg, chunks: newChunks.length });
+  else console.log(`\n✅ ${msg}`);
 
   // Perform Health Check
   verifyStoreIntegrity(storePath, settings.ingestVersion);

@@ -2,6 +2,7 @@
   "appSettings": {
     "inferenceMode": "openrouter",
     "activeModel": "llama-3.2",
-    "activeProfile": "fast"
+    "activeProfile": "fast",
+    "topK": 3
   }
 }

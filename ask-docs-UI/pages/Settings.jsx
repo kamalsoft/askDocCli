@@ -7,6 +7,12 @@ const Settings = () => {
   const [config, setConfig] = useState(null);
   const [verifyResults, setVerifyResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestOptions, setIngestOptions] = useState({ force: false, debug: false });
+  const [ingestProgress, setIngestProgress] = useState(null);
+  const [benchmarking, setBenchmarking] = useState(false);
+  const [benchmarkProgress, setBenchmarkProgress] = useState(null);
+  const [expandedResult, setExpandedResult] = useState(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -35,6 +41,130 @@ const Settings = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleIngest = async () => {
+    setIngesting(true);
+    setIngestProgress({ current: 'Connecting...', count: 0, total: 0 });
+    setMessage('');
+    try {
+      const response = await fetch('/api/ingest', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ingestOptions)
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          processIngestLine(line);
+        }
+      }
+      if (buffer) processIngestLine(buffer);
+    } catch (e) {
+      setMessage('❌ Failed to communicate with server.');
+      setIngestProgress(null);
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  const processIngestLine = (line) => {
+    if (!line.startsWith('data: ')) return;
+    try {
+      const data = JSON.parse(line.replace('data: ', ''));
+      if (data.type === 'start') {
+        setIngestProgress(p => ({ ...p, total: data.total }));
+      } else if (data.type === 'process') {
+        setIngestProgress(p => ({ ...p, current: `Processing: ${data.file}`, count: (p.count || 0) + 1 }));
+      } else if (data.type === 'skip') {
+        setIngestProgress(p => ({ ...p, current: `Skipped (Cached): ${data.file}`, count: (p.count || 0) + 1 }));
+      } else if (data.type === 'done') {
+        setMessage(`✅ ${data.message}`);
+        setIngestProgress(null);
+      } else if (data.type === 'error') {
+        setMessage(`❌ ${data.message}`);
+        setIngestProgress(null);
+      }
+    } catch (e) { console.error("SSE Error:", e); }
+  };
+
+  const handleClearCache = async () => {
+    if (!confirm('Are you sure you want to clear the ingestion cache? This will force a full re-embedding of all documents on the next ingest.')) return;
+    try {
+      const res = await fetch('/api/cache/clear', { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setMessage('✅ Ingestion cache cleared.');
+      } else {
+        setMessage('ℹ️ No cache file found to clear.');
+      }
+    } catch (e) {
+      setMessage('❌ Error clearing cache.');
+    }
+  };
+
+  const handleBenchmark = async () => {
+    setBenchmarking(true);
+    setBenchmarkProgress({ results: [], total: 0, passed: 0 });
+    setMessage('');
+    try {
+      const response = await fetch('/api/benchmark', { method: 'POST' });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to start benchmark');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          processBenchmarkLine(line);
+        }
+      }
+      if (buffer) processBenchmarkLine(buffer);
+    } catch (e) {
+      setMessage(`❌ ${e.message}`);
+    } finally {
+      setBenchmarking(false);
+    }
+  };
+
+  const processBenchmarkLine = (line) => {
+    if (!line.startsWith('data: ')) return;
+    try {
+      const data = JSON.parse(line.replace('data: ', ''));
+      if (data.type === 'start') {
+        setBenchmarkProgress(p => ({ ...p, total: data.total }));
+      } else if (data.type === 'result') {
+        setBenchmarkProgress(p => ({ 
+          ...p, 
+          results: [...p.results, data],
+          passed: data.success ? p.passed + 1 : p.passed
+        }));
+      } else if (data.type === 'done') {
+        setMessage(`🏁 Benchmark complete: ${data.passed}/${data.total} tests passed.`);
+      } else if (data.type === 'error') {
+        setMessage(`❌ Benchmark Error: ${data.message}`);
+      }
+    } catch (e) { console.error("SSE Error:", e); }
   };
 
   const updateConfig = async (updates) => {
@@ -74,6 +204,17 @@ const Settings = () => {
                 <option value="auto">Auto (Fallback)</option>
               </select>
             </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Top K (Context chunks retrieved)</label>
+              <input 
+                type="number" 
+                min="1" 
+                max="20"
+                value={config.topK} 
+                onChange={(e) => updateConfig({ topK: parseInt(e.target.value) || 1 })}
+                style={{ padding: '0.5rem', width: '100px', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <input 
                 type="checkbox" 
@@ -83,6 +224,148 @@ const Settings = () => {
               />
               <label htmlFor="bm25">BM25-Only Mode (Disable semantic embeddings for speed)</label>
             </div>
+          </div>
+        )}
+      </section>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
+
+      <section className="ingest-section" style={{ marginBottom: '2rem' }}>
+        <h2>Document Management</h2>
+        <p style={{ color: '#666', marginBottom: '1rem' }}>
+          Trigger a manual scan of your <code>docs/</code> folder to update the vector store with new or modified content.
+        </p>
+
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+          <button 
+            onClick={handleIngest} 
+            disabled={ingesting}
+            style={{ 
+              padding: '0.6rem 1.2rem', 
+              cursor: 'pointer',
+              background: '#2e7d32',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontWeight: '600'
+            }}
+          >
+            {ingesting ? 'Indexing...' : 'Re-Ingest Documents'}
+          </button>
+          
+          <label style={{ fontSize: '0.9rem', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={ingestOptions.force} 
+              onChange={e => setIngestOptions(prev => ({ ...prev, force: e.target.checked }))}
+              style={{ marginRight: '5px' }}
+            />
+            Force Rebuild
+          </label>
+
+          <button 
+            onClick={handleClearCache}
+            style={{ 
+              padding: '0.6rem 1.2rem', 
+              cursor: 'pointer',
+              background: 'white',
+              color: '#d32f2f',
+              border: '1px solid #d32f2f',
+              borderRadius: '4px',
+              marginLeft: 'auto'
+            }}
+          >
+            Clear Cache
+          </button>
+        </div>
+
+        {ingestProgress && (
+          <div style={{ padding: '1rem', background: '#f5f5f5', borderRadius: '4px', border: '1px solid #ddd' }}>
+            <div style={{ marginBottom: '5px', fontWeight: 'bold' }}>
+              {ingestProgress.count} / {ingestProgress.total} Files
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#555' }}>
+              {ingestProgress.current}
+            </div>
+            <div style={{ height: '8px', background: '#e0e0e0', borderRadius: '4px', marginTop: '10px', overflow: 'hidden' }}>
+              <div style={{ 
+                height: '100%', 
+                background: '#2e7d32', 
+                width: `${(ingestProgress.count / ingestProgress.total) * 100}%`,
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '2rem 0' }} />
+
+      <section className="benchmark-section" style={{ marginBottom: '2rem' }}>
+        <h2>Accuracy Benchmarks</h2>
+        <p style={{ color: '#666', marginBottom: '1rem' }}>
+          Run automated tests against <code>benchmarks.json</code> to verify RAG retrieval and answer quality.
+        </p>
+        <button 
+          onClick={handleBenchmark} 
+          disabled={benchmarking}
+          style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}
+        >
+          {benchmarking ? 'Running Tests...' : 'Run Benchmarks'}
+        </button>
+
+        {benchmarkProgress && (
+          <div style={{ marginTop: '1.5rem', maxHeight: '400px', overflowY: 'auto' }}>
+            <div style={{ marginBottom: '1rem', fontWeight: 'bold' }}>
+              Progress: {benchmarkProgress.results.length} / {benchmarkProgress.total} (Passed: {benchmarkProgress.passed})
+            </div>
+            {benchmarkProgress.results.map((r, i) => (
+              <div key={i} style={{ borderBottom: '1px solid #eee' }}>
+                <div 
+                  onClick={() => setExpandedResult(expandedResult === i ? null : i)}
+                  style={{ 
+                    padding: '0.8rem', 
+                    background: r.success ? '#f1f8e9' : '#ffebee',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span>{r.success ? '✅' : '❌'} <strong>Q:</strong> {r.question}</span>
+                  <span style={{ color: '#666', fontSize: '0.8rem' }}>
+                    (Conf: {r.confidence.toFixed(3)}) {expandedResult === i ? '▲' : '▼'}
+                  </span>
+                </div>
+                {expandedResult === i && (
+                  <div style={{ padding: '1rem', background: '#fafafa', fontSize: '0.85rem' }}>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <strong>Actual Answer:</strong>
+                      <p style={{ margin: '5px 0', color: '#444' }}>{r.actualAnswer}</p>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <strong>Expected Citations:</strong>
+                        <ul style={{ margin: '5px 0', paddingLeft: '1.2rem' }}>
+                          {r.expectedCitations?.map((c, idx) => <li key={idx}>{c}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <strong>Actual Citations:</strong>
+                        <ul style={{ margin: '5px 0', paddingLeft: '1.2rem' }}>
+                          {r.actualCitations?.map((c, idx) => <li key={idx}>{c}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                    {r.expectedKeywords?.length > 0 && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <strong>Expected Keywords:</strong> {r.expectedKeywords.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </section>

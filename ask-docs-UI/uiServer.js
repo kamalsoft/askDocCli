@@ -10,6 +10,7 @@ import { askDocs } from "../ask-docs/ask.js";
 import { ingestDocs } from "../ask-docs/ingest.js";
 import { runFullVerification } from "../ask-docs/verify-models.js";
 import { loadConfig } from "../ask-docs/config.js";
+import { clearCache } from "../ask-docs/cache.js";
 
 // CRITICAL: Logic in ask-docs expects to be run from the engine directory
 // for relative path resolution of the vector store and models.
@@ -45,6 +46,34 @@ async function getRequestBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+// Simple Levenshtein distance for fuzzy matching
+function levenshtein(a, b) {
+  const tmp = [];
+  for (let i = 0; i <= a.length; i++) { tmp[i] = [i]; }
+  for (let j = 0; j <= b.length; j++) { tmp[0][j] = j; }
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      tmp[i][j] = Math.min(tmp[i - 1][j] + 1, tmp[i][j - 1] + 1, tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return tmp[a.length][b.length];
+}
+
+function isFuzzyMatch(text, keyword, threshold = 0.75) {
+  const lowerText = text.toLowerCase();
+  const lowerKeyword = keyword.toLowerCase();
+  if (lowerText.includes(lowerKeyword)) return true;
+  
+  const words = lowerText.split(/[^a-z0-9]+/);
+  for (const word of words) {
+    if (word.length < 3) continue;
+    const dist = levenshtein(word, lowerKeyword);
+    const similarity = 1 - dist / Math.max(word.length, lowerKeyword.length);
+    if (similarity >= threshold) return true;
+  }
+  return false;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -116,17 +145,115 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/config" && req.method === "POST") {
-    const updates = await getRequestBody(req);
-    Object.assign(config.appSettings, updates);
-    return sendJSON(res, 200, { status: "success" });
+    try {
+      const updates = await getRequestBody(req);
+      const configPath = path.resolve("ask-docs.config.json");
+      
+      let userConfig = {};
+      if (fs.existsSync(configPath)) {
+        try {
+          userConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+        } catch (e) { log("Error parsing config file, starting fresh."); }
+      }
+
+      userConfig.appSettings = { ...(userConfig.appSettings || {}), ...updates };
+      fs.writeFileSync(configPath, JSON.stringify(userConfig, null, 2));
+      
+      Object.assign(config.appSettings, updates);
+      return sendJSON(res, 200, { status: "success" });
+    } catch (err) {
+      return sendJSON(res, 500, { error: "Failed to update configuration" });
+    }
   }
 
   if (pathname === "/api/ingest" && req.method === "POST") {
+    const { force, debug } = await getRequestBody(req);
+    log(`Triggering manual ingestion (force=${force}, debug=${debug})...`);
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*"
+    });
+
+    const onProgress = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+
     try {
-      await ingestDocs();
-      return sendJSON(res, 200, { status: "success" });
+      await ingestDocs({ force, debug, onProgress });
+      return res.end();
     } catch (err) {
-      return sendJSON(res, 500, { error: err.message });
+      onProgress({ type: "error", message: err.message });
+      return res.end();
+    }
+  }
+
+  if (pathname === "/api/cache/clear" && req.method === "POST") {
+    const success = clearCache();
+    return sendJSON(res, 200, { status: success ? "success" : "no_cache" });
+  }
+
+  if (pathname === "/api/benchmark" && req.method === "POST") {
+    const benchmarkFile = path.resolve("benchmarks.json");
+    if (!fs.existsSync(benchmarkFile)) {
+      return sendJSON(res, 404, { error: "benchmarks.json not found" });
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*"
+    });
+
+    const onProgress = (payload) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+
+    try {
+      const benchmarks = JSON.parse(fs.readFileSync(benchmarkFile, "utf8"));
+      onProgress({ type: 'start', total: benchmarks.length });
+
+      let passed = 0;
+      for (let i = 0; i < benchmarks.length; i++) {
+        const test = benchmarks[i];
+        const result = await askDocs(test.question);
+
+        const actualCitations = result.citations.map(c => {
+          const parts = c.split(' :: ');
+          const file = parts[0].replace(/^- /, '').trim();
+          const heading = parts[1] ? parts[1].replace(/"/g, '').trim() : '';
+          return `${file} :: ${heading}`;
+        });
+
+        let citationMatch = true;
+        if (test.expectedCitations?.length > 0) {
+          citationMatch = test.expectedCitations.every(e => actualCitations.some(a => a.includes(e)));
+        }
+
+        let keywordMatch = true;
+        if (test.expectedAnswerKeywords?.length > 0) {
+          keywordMatch = test.expectedAnswerKeywords.every(k => isFuzzyMatch(result.answer, k));
+        }
+
+        const success = citationMatch && keywordMatch;
+        if (success) passed++;
+
+        onProgress({ 
+          type: 'result', 
+          index: i, 
+          question: test.question, 
+          success, 
+          confidence: result.confidence,
+          actualAnswer: result.answer,
+          actualCitations,
+          expectedCitations: test.expectedCitations,
+          expectedKeywords: test.expectedAnswerKeywords
+        });
+      }
+      onProgress({ type: 'done', passed, total: benchmarks.length });
+      return res.end();
+    } catch (err) {
+      onProgress({ type: 'error', message: err.message });
+      return res.end();
     }
   }
 
