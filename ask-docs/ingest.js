@@ -92,7 +92,7 @@ function validateModels(config) {
   console.log("✅ Model integrity verified.");
 }
 
-function verifyStoreIntegrity(storePath, expectedVersion) {
+export function verifyStoreIntegrity(storePath, expectedVersion) {
   try {
     const data = JSON.parse(fs.readFileSync(storePath, "utf8"));
     
@@ -173,7 +173,10 @@ export async function ingestDocs({ force = false, debug = false, onProgress = nu
   const finalExclude = [...new Set([...defaultExclude, ...exclude])];
 
   const allFilePaths = await walkDir(docsDir, finalExclude);
-  const files = allFilePaths.filter(f => f.endsWith(".md")).map(f => path.relative(docsDir, f));
+  const files = allFilePaths.filter(f => f.endsWith(".md")).map(f => ({
+    relative: path.relative(docsDir, f),
+    absolute: f
+  }));
 
   if (files.length === 0) {
     throw new Error("No Markdown files found in docs folder.");
@@ -196,9 +199,8 @@ export async function ingestDocs({ force = false, debug = false, onProgress = nu
 
   const newChunks = [];
 
-  for (const file of files) {
+  for (const { relative: file, absolute: fullPath } of files) {
     try {
-      const fullPath = path.join(docsDir, file);
       const text = await fs.promises.readFile(fullPath, "utf8");
 
       if (!force && !shouldRebuildFile(file, text, cache)) {

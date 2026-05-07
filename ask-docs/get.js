@@ -1,7 +1,7 @@
 // This file was moved from the root to api/docs/get.js
 import fs from "fs";
 import path from "path";
-import { getRemoteConfig } from "../../ask-docs/config.js";
+import { getRemoteConfig } from "./config.js";
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,12 +16,19 @@ export default async function handler(req, res) {
 
   try {
     const config = await getRemoteConfig();
-    const docsDir = path.resolve(config.appSettings.docsPath);
+
+    // Robust path resolution: handle internal guides vs user docs
+    const isInternalDoc = req.url.includes('/api/documentation/') || req.headers?.referer?.includes('/api/documentation/');
+    console.log(`Is internal doc: ${isInternalDoc}`);
+    const docsDir = isInternalDoc 
+      ? path.resolve(process.cwd(), 'api', 'documentation')
+      : path.resolve(process.cwd(), config.appSettings.docsPath.replace(/^(\.\.\/|\.\/)/, ''));
+
     // Resolve the absolute path to prevent traversal attacks
     const filePath = path.resolve(docsDir, name);
 
-    // Security: Prevent directory traversal outside of the docs folder
-    if (!filePath.startsWith(docsDir + path.sep) && filePath !== docsDir) {
+    const normalizedDocsDir = docsDir.endsWith(path.sep) ? docsDir : docsDir + path.sep;
+    if (!filePath.startsWith(normalizedDocsDir) && filePath !== docsDir) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

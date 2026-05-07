@@ -1,6 +1,6 @@
 {
   "appSettings": {
-    "inferenceMode": "local",
+    "inferenceMode": "auto",
     "activeModel": "llama-3.2",
     "activeProfile": "fast",
     "topK": 1,

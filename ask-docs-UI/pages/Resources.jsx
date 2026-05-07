@@ -39,10 +39,12 @@ const Resources = () => {
     setLoading(true);
     setSelectedGuide(id);
     try {
-      const res = await fetch(`/api/documentation/get?name=${id}`);
+      const res = await fetch(`/api/get?name=${id}`);
       const text = await res.text();
+      console.log(`Content of guide ${id}:`, text);
       setContent(text);
     } catch (e) {
+      console.error(`Error loading guide: ${id}`, e);
       setContent('Error loading guide.');
     } finally {
       setLoading(false);

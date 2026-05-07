@@ -176,6 +176,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" });
       return res.end(content);
     } catch {
+      console.error(`Error reading documentation file: ${name}`);
       return sendJSON(res, 404, { error: "Guide not found" });
     }
   }
