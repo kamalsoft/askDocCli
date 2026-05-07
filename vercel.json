@@ -1,7 +1,11 @@
 {
+  "version": 2,
   "functions": {
-    "api/**/*.js": {
-      "includeFiles": ["docs/**", "vector-store/**"]
+    "api/*.js": {
+      "includeFiles": [
+        "docs/**",
+        "vector-store/**"
+      ]
     }
   }
 }
