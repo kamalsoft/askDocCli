@@ -2,7 +2,7 @@
 // Local LLM Answer Synthesis using Llama-3.2 (Xenova/ONNX)
 
 import { pipeline, env, TextStreamer } from "@huggingface/transformers";
-import { loadConfig } from "./config.js";
+import { getRemoteConfig } from "./config.js";
 import path from "path";
 import fs from "fs";
 
@@ -31,7 +31,7 @@ function isLooping(text) {
  * Handles inference via OpenRouter API
  */
 async function synthesizeOpenRouterAnswer(question, initialContext, onToken, searchTool) {
-  const config = loadConfig();
+  const config = await getRemoteConfig();
   const { apiKey, model, baseUrl } = config.appSettings.openrouter;
   let context = initialContext;
   let iterations = 0;
@@ -167,22 +167,29 @@ function parseResponse(fullText) {
  * @param {Function} searchTool - Optional async function to perform additional searches: (query) => Promise<string>
  */
 export async function synthesizeAnswer(question, initialContext, onToken = null, retryAttempt = 0, searchTool = null) {
-  const config = loadConfig();
+  const config = await getRemoteConfig();
   const settings = config.appSettings;
   let context = initialContext;
   let iterations = 0;
   const MAX_ITERATIONS = 2; // Allow up to 2 additional search steps
 
   if (settings.inferenceMode === "openrouter") {
-    return synthesizeOpenRouterAnswer(question, context, onToken);
+    return synthesizeOpenRouterAnswer(question, context, onToken, searchTool);
   }
 
   if (settings.inferenceMode === "auto") {
-    try { return await synthesizeOpenRouterAnswer(question, context, onToken); }
+    try { return await synthesizeOpenRouterAnswer(question, context, onToken, searchTool); }
     catch (err) {
       console.warn(`⚠️ OpenRouter failed: ${err.message}. Falling back to local model.`);
+      if (process.env.VERCEL) {
+        throw new Error("OpenRouter failed and local inference is disabled in production.");
+      }
       if (onToken) onToken({ type: "status", text: "OpenRouter unavailable. Falling back to local model..." });
     }
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("Local ONNX inference is disabled in production. Please check OpenRouter configuration.");
   }
 
   let modelKey = settings.activeModel || "llama-3.2";

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { loadConfig } from './config.js';
+import { getRemoteConfig } from './config.js';
 
 export async function verifyOpenRouter(config) {
   const { apiKey, baseUrl } = config.appSettings.openrouter;
@@ -70,7 +70,7 @@ export async function verifyLocalModels(config) {
 }
 
 export async function runFullVerification() {
-  const config = loadConfig();
+  const config = await getRemoteConfig();
   const mode = config.appSettings.inferenceMode;
   const local = await verifyLocalModels(config);
   const remote = (mode !== 'local') ? await verifyOpenRouter(config) : null;

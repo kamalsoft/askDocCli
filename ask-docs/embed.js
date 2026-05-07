@@ -2,16 +2,38 @@
 // Local embedding using Xenova Jina Embeddings v2
 
 import { pipeline, env } from "@huggingface/transformers";
-import { loadConfig } from "./config.js";
+import { getRemoteConfig } from "./config.js";
 import path from "path";
 
 let embedder = null;
 let loadedEmbedRepo = null;
 
 export async function embed(text) {
-  const config = loadConfig();
+  const config = await getRemoteConfig();
   const settings = config.appSettings;
   const modelInfo = config.embeddingModels["jina-v2"];
+
+  // Alternative: Use Jina AI Cloud API in production to avoid bundling heavy models
+  if (process.env.VERCEL || settings.cloudEmbeddings) {
+    if (!settings.jina.apiKey) {
+      throw new Error("JINA_API_KEY is missing. Required for cloud embeddings.");
+    }
+
+    const response = await fetch(settings.jina.baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${settings.jina.apiKey}`
+      },
+      body: JSON.stringify({
+        model: "jina-embeddings-v2-base-en",
+        input: [text]
+      })
+    });
+
+    const result = await response.json();
+    return result.data[0].embedding;
+  }
 
   if (!embedder || loadedEmbedRepo !== modelInfo.repo) {
     env.allowRemoteModels = false;

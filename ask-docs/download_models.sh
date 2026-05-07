@@ -65,7 +65,7 @@ download_model() {
         target="onnx/model_q4.onnx"
     elif [[ "$repo" == "jina-embeddings-v2-base-en" ]]; then
         hub_file="onnx/model_quantized.onnx"
-        target="onnx/model_q4.onnx"
+        target="onnx/model_quantized.onnx"
     else
         hub_file="$target"
     fi

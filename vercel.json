@@ -1,24 +1,7 @@
 {
-  "version": 2,
-  "public": false,
-  "cleanUrls": true,
   "functions": {
     "api/**/*.js": {
-      "includeFiles": "{ask-docs/**,docs/**,ask-docs.config.json,vector-store/**}"
+      "includeFiles": ["docs/**", "vector-store/**"]
     }
-  },
-  "rewrites": [
-    {
-      "source": "/ask",
-      "destination": "/api/ask"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/ask-docs-UI/dist/$1"
-    }
-  ],
-  "framework": "vite",
-  "installCommand": "npm install",
-  "buildCommand": "cd ask-docs-UI && npm install && npm run build",
-  "outputDirectory": "ask-docs-UI/dist"
+  }
 }

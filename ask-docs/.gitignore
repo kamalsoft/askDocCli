@@ -75,3 +75,5 @@ coverage
 models
 logs
 models
+.vercel
+.env*.local

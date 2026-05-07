@@ -15,6 +15,13 @@ Ask-Docs is built on a hybrid RAG (Retrieval-Augmented Generation) architecture.
 *   **Constraint**: **Flexible**. Can be toggled between local SLMs (Small Language Models) for privacy/offline use, or OpenRouter for high-reasoning capabilities.
 *   **Engine**: ONNX Runtime (Local) or HTTPS/REST (OpenRouter).
 
+### 1.3 Minimum System Requirements (Local Mode)
+*   **CPU**: x64 with AVX2 support or ARM64 (Apple Silicon).
+*   **RAM**: 4GB Minimum (8GB+ recommended).
+*   **Disk Space**: ~3GB for model weights.
+*   **Node.js**: v18.x or higher.
+*   **OS**: macOS, Linux, or Windows (via WSL2 or native Node.js).
+
 ---
 
 ## 2. Operating Instructions

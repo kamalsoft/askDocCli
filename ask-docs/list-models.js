@@ -1,9 +1,9 @@
 // ask-docs/list-models.js
 import fs from "fs";
 import path from "path";
-import { loadConfig } from "./config.js";
+import { getRemoteConfig } from "./config.js";
 
-const config = loadConfig();
+const config = await getRemoteConfig(); // Use remote config for listing models
 // Fallback to default path if config is malformed
 const modelsPath = path.resolve(config?.appSettings?.modelsPath || "./models");
 

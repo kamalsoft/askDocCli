@@ -1,4 +1,4 @@
-import { loadConfig, getRemoteConfig } from "../ask-docs/config.js";
+import { getRemoteConfig } from "../ask-docs/config.js";
 import fs from "fs";
 import path from "path";
 
@@ -21,27 +21,13 @@ export default async function handler(req, res) {
     }
   } else if (req.method === "POST") {
     try {
-      const updates = req.body;
-      if (process.env.VERCEL && process.env.EDGE_CONFIG_ID) {
-        // Update Vercel Edge Config via API
-        const response = await fetch(
-          `https://api.vercel.com/v1/edge-config/${process.env.EDGE_CONFIG_ID}/items`,
-          {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${process.env.VERCEL_AUTH_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              items: [{ operation: 'update', key: 'appSettings', value: updates }],
-            }),
-          }
-        );
-        const data = await response.json();
-        return res.status(200).json({ status: "success", info: "Remote config updated", data });
+      if (process.env.VERCEL) {
+        return res.status(403).json({ 
+          error: "Filesystem is read-only on Vercel.", 
+          message: "Please use Edge Config or Environment Variables for updates." 
+        });
       }
-
-      res.status(403).json({ error: "Edge Config ID or Auth Token missing" });
+      // Local logic could go here
     } catch (err) {
       res.status(500).json({ error: "Failed to update configuration", details: err.message });
     }

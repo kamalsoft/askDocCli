@@ -4,33 +4,39 @@ import { fileURLToPath } from "url";
 import { createClient } from "@vercel/edge-config";
 
 // Simple .env loader to populate process.env for local execution
+const __dirname_config = path.dirname(fileURLToPath(import.meta.url));
+
 try {
-  const __dirname_config = path.dirname(fileURLToPath(import.meta.url));
-  const envPath = path.join(__dirname_config, ".env");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    envContent.split(/\r?\n/).forEach(line => {
-      const trimmedLine = line.trim();
-      if (trimmedLine && !trimmedLine.startsWith("#")) {
-        const index = trimmedLine.indexOf("=");
-        if (index > 0) {
-          const key = trimmedLine.substring(0, index).trim();
-          const value = trimmedLine.substring(index + 1).trim().replace(/^["']|["']$/g, "");
-          process.env[key] = value;
+  // Check both local directory and project root for .env files
+  const envPaths = [path.join(__dirname_config, ".env"), path.join(__dirname_config, "..", ".env")];
+  for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, "utf8");
+      envContent.split(/\r?\n/).forEach(line => {
+        const trimmedLine = line.trim();
+        if (trimmedLine && !trimmedLine.startsWith("#")) {
+          const index = trimmedLine.indexOf("=");
+          if (index > 0) {
+            const key = trimmedLine.substring(0, index).trim();
+            const value = trimmedLine.substring(index + 1).trim().replace(/^["']|["']$/g, "");
+            process.env[key] = value;
+          }
         }
-      }
-    });
+      });
+    }
   }
-} catch (e) {}
+} catch (e) {
+  console.warn("⚠️  Failed to load .env file:", e.message);
+}
 
 const DEFAULT_CONFIG = {
   port: 5174,
   appSettings: {
-    docsPath: "../docs",
+    docsPath: "../docs/",
     storePath: "./vector-store/docs.json",
     cachePath: "./vector-store/cache.json",
     modelsPath: "./models",
-    activeModel: "llama-3.2", // Switched from phi-3.5 for speed
+    activeModel: "qwen-0.5b", // Switched to Qwen for minimum memory footprint
     activeProfile: "standard",
     allowRemoteModels: false,
     chunkChars: 600,        // Further reduction: 600 chars is ~100-150 tokens.
@@ -39,7 +45,7 @@ const DEFAULT_CONFIG = {
     ingestVersion: 1,
     bm25Only: false,        // If true, skips embedding generation/usage for faster performance
     // ONNX Threading optimization
-    intraOpNumThreads: 0,    // 0 = Auto-detect (Let ONNX optimize for your specific CPU)
+    intraOpNumThreads: 4,    // Optimized: Set to number of physical CPU cores (e.g., 4)
     interOpNumThreads: 1,    
     maxNewTokens: 256,
     temperature: 0.0,        // Maximum precision.
@@ -48,11 +54,16 @@ const DEFAULT_CONFIG = {
     rerankTopK: 5,          // Reduced to prevent instruction-drift in small models
     enableReranker: true,   // High-fidelity chunk selection
     enableRethink: true,    // Two-pass reasoning
-    inferenceMode: "auto", // Default to local for stability; override in ask-docs.config.json
+    inferenceMode: "openrouter", // Default to local for stability; override in ask-docs.config.json
+    cloudEmbeddings: false, // Set to true to use Jina Cloud API, false for local ONNX
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY || "",
       model: "nvidia/nemotron-3-super-120b-a12b:free",
       baseUrl: "https://openrouter.ai/api/v1"
+    },
+    jina: {
+      apiKey: process.env.JINA_API_KEY || "",
+      baseUrl: "https://api.jina.ai/v1/embeddings"
     }
   },
   profiles: {
@@ -74,7 +85,7 @@ const DEFAULT_CONFIG = {
       targetFile: "onnx/model_q4.onnx",
       dtype: "q4",
       minSize: 600000000,
-      isSplit: true,
+      isSplit: false,
       template: {
         system: "<|start_header_id|>system<|end_header_id|>\n\n",
         user: "<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
@@ -107,14 +118,14 @@ const DEFAULT_CONFIG = {
     "jina-v2": {
       name: "Jina Embeddings v2 (Base)",
       repo: "Xenova/jina-embeddings-v2-base-en",
-      targetFile: "onnx/model_q4.onnx",
+      targetFile: "onnx/model_quantized.onnx",
       minSize: 100000000 // 100MB minimum
     }
   }
 };
 
 export function loadConfig() {
-  const configPath = path.resolve("ask-docs.config.json");
+  const configPath = path.join(__dirname_config, '..', 'ask-docs.config.json');
   let userConfig = {};
 
   if (fs.existsSync(configPath)) {
@@ -137,10 +148,21 @@ export async function getRemoteConfig() {
   try {
     const client = createClient(process.env.EDGE_CONFIG);
     const remoteSettings = await client.get("appSettings");
+
     if (remoteSettings) {
+      const mergedAppSettings = { ...baseConfig.appSettings, ...remoteSettings };
+
+      // Deep merge openrouter sub-object to preserve defaults (like baseUrl)
+      if (remoteSettings.openrouter) {
+        mergedAppSettings.openrouter = {
+          ...baseConfig.appSettings.openrouter,
+          ...remoteSettings.openrouter
+        };
+      }
+
       return {
         ...baseConfig,
-        appSettings: { ...baseConfig.appSettings, ...remoteSettings }
+        appSettings: mergedAppSettings
       };
     }
   } catch (e) {
@@ -150,17 +172,23 @@ export async function getRemoteConfig() {
 }
 
 function finalizeConfig(DEFAULT_CONFIG, userConfig, profileSettings) {
+  const isVercel = !!process.env.VERCEL;
 
   // Map environment variables to config keys
   const envOverrides = {
     docsPath: process.env.ASK_DOCS_PATH,
     modelsPath: process.env.ASK_DOCS_MODELS_PATH,
     activeModel: process.env.ASK_DOCS_MODEL,
-    inferenceMode: process.env.ASK_DOCS_MODE,
-    openrouter: {
-      apiKey: process.env.OPENROUTER_API_KEY,
-      model: process.env.OPENROUTER_MODEL
-    }
+    inferenceMode: process.env.ASK_DOCS_MODE
+  };
+
+  const jinaOverrides = {
+    apiKey: process.env.JINA_API_KEY
+  };
+
+  const openrouterOverrides = {
+    apiKey: process.env.OPENROUTER_API_KEY,
+    model: process.env.OPENROUTER_MODEL
   };
 
   const finalConfig = { 
@@ -171,12 +199,25 @@ function finalizeConfig(DEFAULT_CONFIG, userConfig, profileSettings) {
       ...profileSettings,
       ...(userConfig.appSettings || {}),
       // Merge environment overrides last so they have highest priority
-      ...Object.fromEntries(Object.entries(envOverrides).filter(([_, v]) => v != null)),
+      ...Object.fromEntries(Object.entries(envOverrides).filter(([_, v]) => v !== undefined && v !== null)),
+      jina: {
+        ...DEFAULT_CONFIG.appSettings.jina,
+        ...(userConfig.appSettings?.jina || {}),
+        ...Object.fromEntries(Object.entries(jinaOverrides).filter(([_, v]) => v !== undefined && v !== null))
+      },
       openrouter: {
         ...DEFAULT_CONFIG.appSettings.openrouter,
         ...(userConfig.appSettings?.openrouter || {}),
-        ...Object.fromEntries(Object.entries(envOverrides.openrouter).filter(([_, v]) => v != null))
-      }
+        ...Object.fromEntries(Object.entries(openrouterOverrides).filter(([_, v]) => v !== undefined && v !== null))
+      },
+      // Force cloud-only settings on Vercel to avoid missing local model errors
+      ...(isVercel ? { 
+        inferenceMode: "openrouter", 
+        cloudEmbeddings: true,
+        docsPath: "docs",
+        storePath: "vector-store/docs.json",
+        cachePath: "vector-store/cache.json"
+      } : {})
     }
   };
 

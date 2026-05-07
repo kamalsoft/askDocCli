@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getRemoteConfig } from "../../ask-docs/config.js";
+import { getRemoteConfig } from "../ask-docs/config.js";
 
 export default async function handler(req, res) {
   console.log(`[SYSTEM] Model health check initiated at ${new Date().toISOString()}`);
@@ -61,6 +61,11 @@ export default async function handler(req, res) {
     res.status(200).json({
       activeModel: config.appSettings.activeModel,
       inferenceMode: config.appSettings.inferenceMode,
+      isVercel: !!process.env.VERCEL,
+      cloudConfig: {
+        openrouter: !!config.appSettings.openrouter.apiKey,
+        jina: !!config.appSettings.jina.apiKey
+      },
       modelsPath,
       reasoningModels: modelStatus,
       embeddingModels: embedStatus

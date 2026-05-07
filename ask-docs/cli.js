@@ -4,10 +4,10 @@ import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import { performance } from "perf_hooks";
-import { ingestDocs } from "./ingest.js";
+import { ingestDocs } from "./ingest.js"; // ingestDocs will use getRemoteConfig internally
 import { clearCache } from "./cache.js";
 import { askDocs } from "./ask.js";
-import { loadConfig } from "./config.js";
+import { getRemoteConfig } from "./config.js";
 import { runTUI } from "./tui.js";
 import { openPanelUI } from "./panel.js";
 
@@ -45,7 +45,7 @@ program
       console.log(chalk.green(`⏱  Initial ingest completed in ${seconds}s\n`));
 
       if (watch) {
-        const config = loadConfig();
+        const config = await getRemoteConfig(); // Use remote config for watch mode
         const docsPath = path.resolve(config.appSettings.docsPath);
         console.log(chalk.yellow(`👀 Monitoring docs folder for changes: ${docsPath}`));
         
@@ -196,7 +196,7 @@ program
     const debug = !!opts.debug;
     const start = performance.now();
 
-    if (debug) {
+    if (debug) { // askDocs will use getRemoteConfig internally
       console.log(chalk.cyan(`\n❓ Question: ${question}\n`));
     }
 

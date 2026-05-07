@@ -27,7 +27,7 @@ const Settings = () => {
       const data = await res.json();
       setConfig(data);
     } catch (e) {
-      setMessage('Failed to load configuration.');
+      setMessage('Failed to load configuration. ' + e.message);
     }
   };
 
@@ -39,7 +39,7 @@ const Settings = () => {
       const data = await res.json();
       setVerifyResults(data);
     } catch (e) {
-      setMessage('Verification process failed to start.');
+      setMessage('Verification process failed to start. ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,7 @@ const Settings = () => {
       // Extract just the remote check from the full verification results
       setConnResult(data.remote || { ok: false, message: 'Check failed' });
     } catch (e) {
-      setConnResult({ ok: false, message: 'Failed to reach engine' });
+      setConnResult({ ok: false, message: 'Failed to reach engine. ' + e.message });
     } finally {
       setConnLoading(false);
     }
@@ -88,7 +88,7 @@ const Settings = () => {
       }
       if (buffer) processIngestLine(buffer);
     } catch (e) {
-      setMessage('❌ Failed to communicate with server.');
+      setMessage('❌ Failed to communicate with server. ' + e.message);
       setIngestProgress(null);
     } finally {
       setIngesting(false);
@@ -124,7 +124,7 @@ const Settings = () => {
         setMessage('✅ Configuration reset to factory defaults.');
       }
     } catch (e) {
-      setMessage('❌ Failed to reset configuration.');
+      setMessage('❌ Failed to reset configuration. ' + e.message);
     }
   };
 
@@ -139,7 +139,7 @@ const Settings = () => {
         setMessage('ℹ️ No cache file found to clear.');
       }
     } catch (e) {
-      setMessage('❌ Error clearing cache.');
+      setMessage('❌ Error clearing cache. ' + e.message);
     }
   };
 
