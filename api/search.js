@@ -1,7 +1,7 @@
 // This file was moved from the root to api/docs/search.js
 import fs from "fs";
 import path from "path";
-import { loadConfig } from "./ask-docs/config.js";
+import { loadConfig } from "../ask-docs/config.js";
 
 async function walk(dir, exclude = []) {
   let files = [];

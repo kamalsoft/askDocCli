@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getRemoteConfig } from "../ask-docs/config.js";
+import { getRemoteConfig } from "../../ask-docs/config.js";
 
 export default async function handler(req, res) {
   console.log(`[SYSTEM] Model health check initiated at ${new Date().toISOString()}`);
@@ -14,6 +14,39 @@ export default async function handler(req, res) {
 
   try {
     const config = await getRemoteConfig();
+
+    let latency = null;
+    if (req.query.checkLatency === 'true') {
+      const testPing = async (url, headers, method = 'GET', body = null) => {
+        const start = Date.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+        try {
+          const res = await fetch(url, { 
+            method, 
+            headers, 
+            body: body ? JSON.stringify(body) : null,
+            signal: controller.signal 
+          });
+          clearTimeout(timeoutId);
+          return res.ok ? Date.now() - start : -1;
+        } catch (e) {
+          clearTimeout(timeoutId);
+          return -1;
+        }
+      };
+
+      latency = {
+        openrouter: config.appSettings.openrouter.apiKey 
+          ? await testPing(`${config.appSettings.openrouter.baseUrl}/models`, { 'Authorization': `Bearer ${config.appSettings.openrouter.apiKey}` })
+          : null,
+        jina: config.appSettings.jina.apiKey
+          ? await testPing(config.appSettings.jina.baseUrl, { 'Authorization': `Bearer ${config.appSettings.jina.apiKey}`, 'Content-Type': 'application/json' }, 'POST', { model: 'jina-embeddings-v2-base-en', input: ['ping'] })
+          : null
+      };
+    }
+
     const modelsPath = path.resolve(config.appSettings.modelsPath);
     console.log(`[SYSTEM] Scanning models directory: ${modelsPath}`);
     
@@ -66,6 +99,7 @@ export default async function handler(req, res) {
         openrouter: !!config.appSettings.openrouter.apiKey,
         jina: !!config.appSettings.jina.apiKey
       },
+      latency,
       modelsPath,
       reasoningModels: modelStatus,
       embeddingModels: embedStatus

@@ -1,19 +1,14 @@
+// This file was moved from api/list.js to api/docs/list.js
 import fs from "fs";
 import path from "path";
-import { getRemoteConfig } from "../ask-docs/config.js";
+import { loadConfig } from "../../ask-docs/config.js";
 
 /**
  * Recursively finds all markdown files in a directory.
  */
 async function walk(dir, exclude = []) {
   let files = [];
-  let list;
-  try {
-    list = await fs.promises.readdir(dir, { withFileTypes: true });
-  } catch (err) {
-    return [];
-  }
-
+  const list = await fs.promises.readdir(dir, { withFileTypes: true });
   for (const entry of list) {
     if (exclude.includes(entry.name)) continue;
     
@@ -41,7 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const config = await getRemoteConfig();
+    const config = loadConfig();
     const settings = config.appSettings;
     const docsDir = path.resolve(settings.docsPath);
 
